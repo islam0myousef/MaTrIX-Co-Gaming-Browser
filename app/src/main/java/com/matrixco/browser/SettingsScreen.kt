@@ -187,6 +187,24 @@ class SettingsScreen(
             toggle("trash", "مسح تلقائي عند الخروج", "كوكيز + كاش + سجل", Cfg.AUTOCLEAR, false),
             toggle("lock", "قفل التطبيق", "بصمة أو PIN الجهاز عند الرجوع", Cfg.APPLOCK, false)
         ))
+        section(col, "قفل الإعدادات")
+        run {
+            val on = PinLock.enabled()
+            val sw = ui.switchView(on)
+            val r = rowBase("lock", "قفل الإعدادات بـ PIN", if (on) "مفعّل — مطلوب لفتح الإعدادات وتغيير الحماية" else "يمنع أي حد من تعديل الفلاتر والحماية", sw, null)
+            r.setOnClickListener {
+                if (!PinLock.enabled()) a.pinLock.setup { render() }
+                else a.pinLock.ask("أدخل الـ PIN لإيقاف القفل") { a.pinLock.disable(); a.toastMsg("اتقفل القفل"); render() }
+            }
+            val items = arrayListOf<View>(r)
+            if (on) {
+                items.add(action("lock", "تغيير الـ PIN", "بيطلب الـ PIN الحالي الأول") {
+                    a.pinLock.ask("أدخل الـ PIN الحالي") { a.pinLock.setup { render() } }
+                })
+                if (PinLock.bioAvailable()) items.add(toggle("lock", "فتح بالبصمة", "بديل للـ PIN لو بصمتك متسجّلة في الجهاز", PinLock.BIO, false))
+            }
+            card(col, items)
+        }
         section(col, "القوائم")
         val names = RuleUpdater.activeLists(a)
         card(col, listOf(

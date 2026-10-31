@@ -11,8 +11,8 @@ defaultConfig {
     applicationId = "com.matrixco.browser"
     minSdk = 23
     targetSdk = 28
-    versionCode = 10
-    versionName = "3.3.3"
+    versionCode = 11
+    versionName = "3.4.0"
 }
 
 buildTypes {

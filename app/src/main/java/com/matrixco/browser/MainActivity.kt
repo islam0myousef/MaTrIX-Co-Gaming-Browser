@@ -114,6 +114,7 @@ class MainActivity : Activity() {
     private lateinit var db: ShieldDatabase
     private lateinit var theme: MxTheme
     private lateinit var ui: UiKit
+    internal val pinLock: PinLock by lazy { PinLock(this, ui) }
 
     private val tabs = ArrayList<Tab>()
     private var cur: Tab? = null
@@ -296,7 +297,7 @@ class MainActivity : Activity() {
         super.onPause()
     }
 
-    override fun onStop() { lastStopAt = System.currentTimeMillis(); super.onStop() }
+    override fun onStop() { lastStopAt = System.currentTimeMillis(); PinLock.lockNow(); if (PinLock.enabled()) settings?.close(); super.onStop() }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
@@ -345,6 +346,7 @@ class MainActivity : Activity() {
                 if (resultCode == RESULT_OK && r != null) cur?.let { loadInTab(it, r) }
             }
             REQ_LOCK -> { if (resultCode == RESULT_OK) unlockApp() else lockApp() }
+            REQ_PINRESET -> if (resultCode == RESULT_OK) { pinLock.resetByDevice(); toast("اتلغى قفل الـ PIN — فعّله تاني من الإعدادات بـ PIN جديد") }
             else -> { super.onActivityResult(requestCode, resultCode, data) }
         }
     }
@@ -1630,6 +1632,17 @@ class MainActivity : Activity() {
         } catch (_: Exception) { unlockApp() }
     }
 
+    /** نسيت الـ PIN: التحقق بقفل شاشة الجهاز */
+    internal fun pinForgot() {
+        val km = getSystemService(KEYGUARD_SERVICE) as KeyguardManager
+        if (!km.isKeyguardSecure) { toast("مفيش قفل شاشة للجهاز. الحل الوحيد: مسح بيانات التطبيق من إعدادات أندرويد"); return }
+        try {
+            @Suppress("DEPRECATION")
+            val i = km.createConfirmDeviceCredentialIntent("MaTrIX Co", "أكّد هويتك لإلغاء قفل الـ PIN")
+            if (i != null) startActivityForResult(i, REQ_PINRESET)
+        } catch (_: Exception) { toast("تعذّر فتح تأكيد الهوية") }
+    }
+
     private fun unlockApp() { locked = false; lockView2?.let { root.removeView(it) }; lockView2 = null; lastStopAt = 0L }
 
     // ═════════════════ الشاشات (Sheets) ═════════════════
@@ -1691,8 +1704,11 @@ class MainActivity : Activity() {
         hdr.addView(hc, LinearLayout.LayoutParams(0, WRAP, 1f))
         val master = ui.switchView(on)
         master.setOnClickListener {
-            val v = !Cfg.bool(Cfg.SHIELD, true); Cfg.setBool(Cfg.SHIELD, v); ui.applySwitch(master, v)
-            dismissMenu(); cur?.web?.reload()
+            ui.applySwitch(master, Cfg.bool(Cfg.SHIELD, true))
+            gate {
+                val v = !Cfg.bool(Cfg.SHIELD, true); Cfg.setBool(Cfg.SHIELD, v); ui.applySwitch(master, v)
+                dismissMenu(); cur?.web?.reload()
+            }
         }
         hdr.addView(master)
         box.addView(hdr, LinearLayout.LayoutParams(MATCH, WRAP).apply { setMargins(dp(10), dp(2), dp(10), dp(6)) })
@@ -1812,7 +1828,7 @@ class MainActivity : Activity() {
             if (sub != null) c.addView(TextView(this).apply { text = sub; textSize = 11f; setTextColor(theme.sub) })
             r.addView(c, LinearLayout.LayoutParams(0, WRAP, 1f))
             r.addView(sw)
-            r.setOnClickListener { st = !st; ui.applySwitch(sw, st); onChange(st) }
+            r.setOnClickListener { gate(true) { st = !st; ui.applySwitch(sw, st); onChange(st) } }
             return r
         }
         fun divider(): View = View(this).apply { setBackgroundColor(theme.surface2); layoutParams = LinearLayout.LayoutParams(MATCH, 1).apply { setMargins(0, dp(6), 0, dp(6)) } }
@@ -1828,8 +1844,11 @@ class MainActivity : Activity() {
         head.addView(hc, LinearLayout.LayoutParams(0, WRAP, 1f))
         val headSw = ui.switchView(if (internal) AdBlocker.enabled() else siteOn)
         headSw.setOnClickListener {
-            if (internal) { Cfg.setBool(Cfg.SHIELD, !Cfg.bool(Cfg.SHIELD, true)) } else AdBlocker.setSiteAllowed(host, siteOn)
-            dismissShield(); reloadSoon()
+            ui.applySwitch(headSw, if (internal) AdBlocker.enabled() else siteOn)
+            gate {
+                if (internal) { Cfg.setBool(Cfg.SHIELD, !Cfg.bool(Cfg.SHIELD, true)) } else AdBlocker.setSiteAllowed(host, siteOn)
+                dismissShield(); reloadSoon()
+            }
         }
         head.addView(headSw)
         box.addView(head)
@@ -1912,6 +1931,18 @@ class MainActivity : Activity() {
 
     private fun openSettings(page: String = "main") {
         dismissMenu(); dismissShield()
+        if (page == "appearance") { openSettingsNow(page); return }
+        pinLock.ask { openSettingsNow(page) }
+    }
+
+    /** بينفّذ الإجراء لو القفل مش شغّال أو الجلسة مفتوحة، وإلا بيطلب الـ PIN الأول */
+    private fun gate(reopenShield: Boolean = false, block: () -> Unit) {
+        if (!PinLock.enabled() || PinLock.sessionOpen()) { block(); return }
+        dismissShield(); dismissMenu()
+        pinLock.ask { block(); if (reopenShield) showShieldPanel() }
+    }
+
+    private fun openSettingsNow(page: String) {
         settings?.close()
         val sc = SettingsScreen(this, ui, theme, root) { settings = null }
         settings = sc
@@ -2660,6 +2691,7 @@ class MainActivity : Activity() {
         private const val REQ_STORAGE = 4102
         private const val REQ_VOICE = 4104
         private const val REQ_LOCK = 4105
+        private const val REQ_PINRESET = 4106
         private val GAME_HOSTS = listOf("conqueronline.com", "playconqueronline.com")
         private const val DESKTOP_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         private val PAL = intArrayOf(
