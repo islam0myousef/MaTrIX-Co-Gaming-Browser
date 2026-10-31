@@ -12,8 +12,11 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - uses: android-actions/setup-android@v3
-      - run: sdkmanager "platforms;android-35" "build-tools;34.0.0" "build-tools;35.0.0"
+      - name: Ensure SDK packages
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKM" ] || SDKM=$(command -v sdkmanager || true)
+          "$SDKM" "platforms;android-35" "build-tools;34.0.0" || echo "sdkmanager skipped"
       - run: sed -i '/aapt2FromMavenOverride/d' gradle.properties
       - run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
