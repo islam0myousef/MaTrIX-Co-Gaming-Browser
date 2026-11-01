@@ -132,6 +132,51 @@ class ShieldDatabase private constructor(private val ctx: Context) :
         return 0
     }
 
+    // ───────────── النسخ الاحتياطي ─────────────
+
+    fun dumpTable(table: String, cols: List<String>): org.json.JSONArray {
+        val out = org.json.JSONArray()
+        readableDatabase.rawQuery("SELECT " + cols.joinToString(",") + " FROM " + table, null).use { c ->
+            while (c.moveToNext()) {
+                val o = org.json.JSONObject()
+                for ((i, k) in cols.withIndex()) when (c.getType(i)) {
+                    android.database.Cursor.FIELD_TYPE_NULL -> {}
+                    android.database.Cursor.FIELD_TYPE_INTEGER -> o.put(k, c.getLong(i))
+                    else -> o.put(k, c.getString(i))
+                }
+                out.put(o)
+            }
+        }
+        return out
+    }
+
+    fun restoreTable(table: String, cols: List<String>, rows: org.json.JSONArray): Int = synchronized(lock) {
+        var n = 0
+        val db = writableDatabase
+        try {
+            db.beginTransaction()
+            try {
+                for (i in 0 until rows.length()) {
+                    val r = rows.optJSONObject(i) ?: continue
+                    if (table == "user_scripts") {
+                        val dup = db.rawQuery("SELECT 1 FROM user_scripts WHERE host = ? AND COALESCE(name,'') = ? AND code = ? LIMIT 1",
+                            arrayOf(r.optString("host"), r.optString("name"), r.optString("code"))).use { it.moveToFirst() }
+                        if (dup) continue
+                    }
+                    val cv = ContentValues()
+                    for (k in cols) {
+                        if (!r.has(k) || r.isNull(k)) continue
+                        val v = r.get(k)
+                        if (v is Number) cv.put(k, v.toLong()) else cv.put(k, v.toString())
+                    }
+                    if (db.insertWithOnConflict(table, null, cv, SQLiteDatabase.CONFLICT_IGNORE) != -1L) n++
+                }
+                db.setTransactionSuccessful()
+            } finally { db.endTransaction() }
+        } catch (_: Exception) {}
+        n
+    }
+
     fun flAdd(l: Int, cat: Int, h: Long) = synchronized(lock) {
         try { writableDatabase.execSQL("INSERT OR IGNORE INTO fl_dom(h, l, c) VALUES(?, ?, ?)", arrayOf<Any>(h, l, cat)) } catch (_: Exception) {}
         Unit

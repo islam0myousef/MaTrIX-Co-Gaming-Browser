@@ -156,11 +156,11 @@ class SettingsScreen(
         section(col, "البيانات")
         card(col, listOf(
             action("trash", "مسح بيانات التصفح", "كوكيز، كاش، سجل") { a.confirmClear() },
-            action("share", "نسخ احتياطي", "ينسخ إعداداتك ومفضلتك") { a.exportBackup() },
-            action("download", "استرجاع نسخة", "الصق نص النسخة الاحتياطية") { close(); a.importBackup() }
+            action("share", "نسخ احتياطي", "ملف فيه إعداداتك ومفضلتك وفلاترك وكلماتك") { a.exportBackup() },
+            action("download", "استرجاع نسخة", "من ملف نسخة احتياطية") { close(); a.importBackup() }
         ))
         section(col, "حول")
-        card(col, listOf(nav("info", "حول MaTrIX Co", "الإصدار 3.3") { push("about") }))
+        card(col, listOf(nav("info", "حول MaTrIX Co", "الإصدار 3.5.0") { push("about") }))
     }
 
     private fun privacy(col: LinearLayout) {
@@ -382,7 +382,7 @@ class SettingsScreen(
 
     private fun about(col: LinearLayout) {
         col.addView(TextView(a).apply {
-            text = "MaTrIX Co — متصفح ألعاب بدرع حماية وكاشف تجسس.\nالإصدار 3.3\n\nالأيقونات والواجهة مرسومة بالكود بدون مكتبات خارجية، والقوائم بتتحدث تلقائيًا كل 24 ساعة."
+            text = "MaTrIX Co — متصفح ألعاب بدرع حماية وكاشف تجسس.\nالإصدار 3.5.0\n\nالأيقونات والواجهة مرسومة بالكود بدون مكتبات خارجية، والقوائم بتتحدث تلقائيًا كل 24 ساعة."
             textSize = 14f; setTextColor(theme.sub); setPadding(dp(8), dp(14), dp(8), dp(8))
         })
     }

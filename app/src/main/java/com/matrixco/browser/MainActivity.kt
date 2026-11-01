@@ -346,6 +346,26 @@ class MainActivity : Activity() {
                 if (resultCode == RESULT_OK && r != null) cur?.let { loadInTab(it, r) }
             }
             REQ_LOCK -> { if (resultCode == RESULT_OK) unlockApp() else lockApp() }
+            REQ_BK_EXPORT -> if (resultCode == RESULT_OK) data?.data?.let { uri ->
+                io.execute {
+                    try {
+                        val text = Backup.export(this)
+                        contentResolver.openOutputStream(uri, "wt")?.use { it.write(text.toByteArray(Charsets.UTF_8)) }
+                        h.post { toast("✅ النسخة الاحتياطية اتحفظت") }
+                    } catch (_: Exception) { h.post { toast("فشل حفظ الملف") } }
+                }
+            }
+            REQ_BK_IMPORT -> if (resultCode == RESULT_OK) data?.data?.let { uri ->
+                io.execute {
+                    try {
+                        val text = contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) } ?: ""
+                        if (text.length > 20_000_000) throw IllegalArgumentException("too big")
+                        val n = Backup.import(this, text)
+                        FilterEngine.refreshAsync(this) { _, _ -> }
+                        h.post { toast("✅ اتسترجع $n عنصر. القوائم بتتحمّل تاني"); recreate() }
+                    } catch (_: Exception) { h.post { toast("الملف ده مش نسخة احتياطية صالحة") } }
+                }
+            }
             REQ_PINRESET -> if (resultCode == RESULT_OK) { pinLock.resetByDevice(); toast("اتلغى قفل الـ PIN — فعّله تاني من الإعدادات بـ PIN جديد") }
             else -> { super.onActivityResult(requestCode, resultCode, data) }
         }
@@ -2016,40 +2036,19 @@ class MainActivity : Activity() {
 
     private val backupKeys = listOf(Cfg.THEME, Cfg.ENGINE, Cfg.ADS, Cfg.TRK, Cfg.MAL, Cfg.SOC, Cfg.ANNOY, Cfg.SPY, Cfg.HTTPS_ONLY, Cfg.MIXED, Cfg.FP, Cfg.SAFEB, Cfg.DLWARN, Cfg.DARK, Cfg.GESTURES, Cfg.FPS, Cfg.CACHE_MB)
 
-    internal fun exportBackup() {
-        val o = JSONObject()
-        val p = JSONObject()
-        for (k in backupKeys) { val v = Cfg.prefs.all[k]; if (v != null) p.put(k, v) }
-        o.put("prefs", p)
-        o.put("shortcuts", Cfg.str("shortcuts", "")); o.put("games", Cfg.str("games", ""))
-        val bm = JSONArray(); for (b in db.getBookmarks(500)) bm.put(JSONObject().put("u", b.url).put("t", b.title)); o.put("bookmarks", bm)
-        val sc = JSONArray(); for (s in db.getScripts()) sc.put(JSONObject().put("h", s.host).put("n", s.name).put("c", s.code).put("t", s.type)); o.put("scripts", sc)
-        val text = o.toString()
-        copyText(text)
-        startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "حفظ النسخة الاحتياطية"))
+    /** نسخة احتياطية في ملف (بيطلب الـ PIN لو القفل شغّال) */
+    internal fun exportBackup() = gate {
+        val name = "MaTrIX-backup-" + java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.US).format(java.util.Date()) + ".json"
+        try {
+            startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                .setType("application/json").putExtra(Intent.EXTRA_TITLE, name), REQ_BK_EXPORT)
+        } catch (_: Exception) { toast("تعذّر فتح مدير الملفات") }
     }
 
-    internal fun importBackup() {
-        ui.sheet { box, d ->
-            box.addView(ui.titleView("📥 استرجاع نسخة"))
-            val inp = ui.input("الصق النص هنا", true)
-            box.addView(inp); box.addView(ui.space(10))
-            box.addView(ui.button("استرجاع") {
-                try {
-                    val o = JSONObject(inp.text.toString().trim())
-                    o.optJSONObject("prefs")?.let { p ->
-                        val e = Cfg.prefs.edit()
-                        for (k in backupKeys) if (p.has(k)) when (val v = p.get(k)) { is Boolean -> e.putBoolean(k, v); is Int -> e.putInt(k, v); is String -> e.putString(k, v) }
-                        e.apply()
-                    }
-                    o.optString("shortcuts").takeIf { it.isNotEmpty() }?.let { Cfg.setStr("shortcuts", it) }
-                    o.optString("games").takeIf { it.isNotEmpty() }?.let { Cfg.setStr("games", it) }
-                    o.optJSONArray("bookmarks")?.let { a -> for (i in 0 until a.length()) { val b = a.getJSONObject(i); db.addBookmark(b.getString("u"), b.optString("t")) } }
-                    o.optJSONArray("scripts")?.let { a -> for (i in 0 until a.length()) { val s = a.getJSONObject(i); db.addScript(s.getString("h"), s.optString("n"), s.getString("c"), s.optString("t", "js")) } }
-                    d.dismiss(); toast("✅ تم الاسترجاع"); recreate()
-                } catch (_: Exception) { toast("النص غير صالح") }
-            })
-        }
+    internal fun importBackup() = gate {
+        try {
+            startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"), REQ_BK_IMPORT)
+        } catch (_: Exception) { toast("تعذّر فتح مدير الملفات") }
     }
 
     // ── شاشة التبويبات (بأسلوب Brave): معاينة حقيقية لكل تبويب + وضع خاص بشخصيته
@@ -2692,6 +2691,8 @@ class MainActivity : Activity() {
         private const val REQ_VOICE = 4104
         private const val REQ_LOCK = 4105
         private const val REQ_PINRESET = 4106
+        private const val REQ_BK_EXPORT = 4107
+        private const val REQ_BK_IMPORT = 4108
         private val GAME_HOSTS = listOf("conqueronline.com", "playconqueronline.com")
         private const val DESKTOP_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         private val PAL = intArrayOf(

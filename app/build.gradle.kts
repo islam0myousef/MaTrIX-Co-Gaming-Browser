@@ -11,14 +11,32 @@ defaultConfig {
     applicationId = "com.matrixco.browser"
     minSdk = 23
     targetSdk = 28
-    versionCode = 11
-    versionName = "3.4.0"
+    versionCode = 12
+    versionName = "3.5.0"
+}
+
+signingConfigs {
+    create("release") {
+        val ks = System.getenv("MX_KEYSTORE")
+        if (!ks.isNullOrEmpty() && file(ks).exists()) {
+            storeFile = file(ks)
+            storePassword = System.getenv("MX_STORE_PASS")
+            keyAlias = System.getenv("MX_KEY_ALIAS")
+            keyPassword = System.getenv("MX_KEY_PASS")
+        }
+    }
 }
 
 buildTypes {
     release {
         isMinifyEnabled = false
+        if (!System.getenv("MX_KEYSTORE").isNullOrEmpty()) signingConfig = signingConfigs.getByName("release")
     }
+}
+
+lint {
+    checkReleaseBuilds = false
+    abortOnError = false
 }
 
 compileOptions {

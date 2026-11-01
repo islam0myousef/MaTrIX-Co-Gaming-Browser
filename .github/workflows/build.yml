@@ -3,6 +3,9 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    tags: ['v*']
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -12,14 +15,28 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - name: Ensure SDK packages
-        run: |
-          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          [ -x "$SDKM" ] || SDKM=$(command -v sdkmanager || true)
-          "$SDKM" "platforms;android-35" "build-tools;34.0.0" || echo "sdkmanager skipped"
+      - name: Check signing secrets
+        env:
+          B64: ${{ secrets.MX_KEYSTORE_B64 }}
+        run: test -n "$B64" || (echo "Missing secret MX_KEYSTORE_B64" && exit 1)
+      - name: Decode keystore
+        env:
+          B64: ${{ secrets.MX_KEYSTORE_B64 }}
+        run: echo "$B64" | base64 -d > "$RUNNER_TEMP/matrix.jks"
       - run: sed -i '/aapt2FromMavenOverride/d' gradle.properties
-      - run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+      - name: Build signed release APK
+        env:
+          MX_KEYSTORE: ${{ runner.temp }}/matrix.jks
+          MX_STORE_PASS: ${{ secrets.MX_STORE_PASS }}
+          MX_KEY_ALIAS: ${{ secrets.MX_KEY_ALIAS }}
+          MX_KEY_PASS: ${{ secrets.MX_KEY_PASS }}
+        run: chmod +x gradlew && ./gradlew assembleRelease --no-daemon
       - uses: actions/upload-artifact@v4
         with:
-          name: MaTrIX-Co-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: MaTrIX-Co-release-apk
+          path: app/build/outputs/apk/release/app-release.apk
+      - name: Publish release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/outputs/apk/release/app-release.apk
