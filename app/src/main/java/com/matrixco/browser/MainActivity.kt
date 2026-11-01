@@ -115,6 +115,10 @@ class MainActivity : Activity() {
     private lateinit var theme: MxTheme
     private lateinit var ui: UiKit
     internal val pinLock: PinLock by lazy { PinLock(this, ui) }
+    internal val updateUi: UpdateUi by lazy { UpdateUi(this, ui) }
+    private var updChecked = false
+
+    internal fun appVersion(): String = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "" } catch (_: Exception) { "" }
 
     private val tabs = ArrayList<Tab>()
     private var cur: Tab? = null
@@ -276,6 +280,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        if (!updChecked) { updChecked = true; h.postDelayed({ updateUi.checkAuto() }, 4000) }
         stopService(Intent(this, AudioService::class.java))
         cur?.web?.onResume()
         h.removeCallbacks(ticker)

@@ -160,7 +160,7 @@ class SettingsScreen(
             action("download", "استرجاع نسخة", "من ملف نسخة احتياطية") { close(); a.importBackup() }
         ))
         section(col, "حول")
-        card(col, listOf(nav("info", "حول MaTrIX Co", "الإصدار 3.5.0") { push("about") }))
+        card(col, listOf(nav("info", "حول MaTrIX Co", "الإصدار " + a.appVersion()) { push("about") }))
     }
 
     private fun privacy(col: LinearLayout) {
@@ -382,8 +382,13 @@ class SettingsScreen(
 
     private fun about(col: LinearLayout) {
         col.addView(TextView(a).apply {
-            text = "MaTrIX Co — متصفح ألعاب بدرع حماية وكاشف تجسس.\nالإصدار 3.5.0\n\nالأيقونات والواجهة مرسومة بالكود بدون مكتبات خارجية، والقوائم بتتحدث تلقائيًا كل 24 ساعة."
+            text = "MaTrIX Co — متصفح ألعاب بدرع حماية وكاشف تجسس.\nالإصدار " + a.appVersion() + "\n\nالأيقونات والواجهة مرسومة بالكود بدون مكتبات خارجية، والقوائم بتتحدث تلقائيًا كل 24 ساعة."
             textSize = 14f; setTextColor(theme.sub); setPadding(dp(8), dp(14), dp(8), dp(8))
         })
+        section(col, "التحديثات")
+        card(col, listOf(
+            action("reload", "فحص التحديثات الآن", "الإصدار الحالي " + a.appVersion()) { a.updateUi.check(true) },
+            toggle("reload", "فحص تلقائي للتحديثات", "مرتين في اليوم كحد أقصى، لما تفتح التطبيق", "upd_auto", true)
+        ))
     }
 }
