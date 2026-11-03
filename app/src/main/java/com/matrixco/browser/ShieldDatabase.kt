@@ -32,7 +32,7 @@ object Hash {
 object Cat { const val ADS = 1; const val TRK = 2; const val MAL = 3; const val SOC = 4; const val SPY = 5 }
 
 class ShieldDatabase private constructor(private val ctx: Context) :
-    SQLiteOpenHelper(ctx, "matrix_shield.db", null, 4) {
+    SQLiteOpenHelper(ctx, "matrix_shield.db", null, 5) {
 
     private val lock = Any()
 
@@ -62,6 +62,8 @@ class ShieldDatabase private constructor(private val ctx: Context) :
     }
 
     private fun createAll(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS risk_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, host TEXT NOT NULL, url TEXT NOT NULL, reason TEXT NOT NULL, score INTEGER NOT NULL)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS risk_allow (host TEXT PRIMARY KEY)")
         db.execSQL("CREATE TABLE IF NOT EXISTS fl_dom (h INTEGER NOT NULL, l INTEGER NOT NULL, c INTEGER NOT NULL, PRIMARY KEY(h, l)) WITHOUT ROWID")
         db.execSQL("CREATE TABLE IF NOT EXISTS fl_cosm (l INTEGER NOT NULL, h INTEGER NOT NULL, sel TEXT NOT NULL)")
         db.execSQL("CREATE INDEX IF NOT EXISTS fl_cosm_h ON fl_cosm(h)")
@@ -176,6 +178,47 @@ class ShieldDatabase private constructor(private val ctx: Context) :
         } catch (_: Exception) {}
         n
     }
+
+    // ───────────── الجدار الحديدي ─────────────
+
+    fun addRiskLog(host: String, url: String, reason: String, score: Int) = synchronized(lock) {
+        try {
+            val db = writableDatabase
+            val cv = ContentValues().apply { put("ts", System.currentTimeMillis()); put("host", host); put("url", url); put("reason", reason); put("score", score) }
+            db.insert("risk_log", null, cv)
+            db.execSQL("DELETE FROM risk_log WHERE id NOT IN (SELECT id FROM risk_log ORDER BY id DESC LIMIT 500)")
+        } catch (_: Exception) {}
+        Unit
+    }
+
+    /** كل صف: [الوقت، الموقع، السبب، الدرجة، الرابط] */
+    fun riskLog(limit: Int): List<Array<String>> {
+        val out = ArrayList<Array<String>>()
+        readableDatabase.rawQuery("SELECT ts, host, reason, score, url FROM risk_log ORDER BY id DESC LIMIT $limit", null).use { c ->
+            while (c.moveToNext()) out.add(arrayOf(c.getLong(0).toString(), c.getString(1), c.getString(2), c.getInt(3).toString(), c.getString(4)))
+        }
+        return out
+    }
+
+    fun clearRiskLog() = synchronized(lock) { try { writableDatabase.execSQL("DELETE FROM risk_log") } catch (_: Exception) {}; Unit }
+
+    fun riskAllowed(host: String): Boolean {
+        var h = host.lowercase()
+        while (true) {
+            readableDatabase.rawQuery("SELECT 1 FROM risk_allow WHERE host = ? LIMIT 1", arrayOf(h)).use { if (it.moveToFirst()) return true }
+            val i = h.indexOf('.'); if (i < 0) return false
+            h = h.substring(i + 1); if (!h.contains('.')) return false
+        }
+    }
+
+    fun riskAllowList(): List<String> {
+        val out = ArrayList<String>()
+        readableDatabase.rawQuery("SELECT host FROM risk_allow ORDER BY host", null).use { while (it.moveToNext()) out.add(it.getString(0)) }
+        return out
+    }
+
+    fun riskAllowAdd(host: String) = synchronized(lock) { try { writableDatabase.execSQL("INSERT OR IGNORE INTO risk_allow(host) VALUES(?)", arrayOf<Any>(host.lowercase())) } catch (_: Exception) {}; Unit }
+    fun riskAllowRemove(host: String) = synchronized(lock) { try { writableDatabase.execSQL("DELETE FROM risk_allow WHERE host = ?", arrayOf<Any>(host.lowercase())) } catch (_: Exception) {}; Unit }
 
     fun flAdd(l: Int, cat: Int, h: Long) = synchronized(lock) {
         try { writableDatabase.execSQL("INSERT OR IGNORE INTO fl_dom(h, l, c) VALUES(?, ?, ?)", arrayOf<Any>(h, l, cat)) } catch (_: Exception) {}

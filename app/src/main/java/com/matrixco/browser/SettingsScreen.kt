@@ -74,13 +74,14 @@ class SettingsScreen(
         val title = when (page) {
             "main" -> "الإعدادات"; "privacy" -> "الدرع والخصوصية"; "spy" -> "كاشف التجسس"; "ai" -> "المساعد الذكي (Claude)"
             "appearance" -> "المظهر"; "search" -> "محرك البحث"; "storage" -> "المساحة والأداء"; "games" -> "الألعاب"
-            "browsing" -> "التصفح"; "about" -> "حول MaTrIX Co"; "filters" -> "عوامل تصفية المحتوى"; "keywords" -> "حجب بالكلمات"; "customrules" -> "عوامل تصفية مخصصة"; else -> "الإعدادات"
+            "browsing" -> "التصفح"; "about" -> "حول MaTrIX Co"; "gxmods" -> "GX Mods"; "gxcontrol" -> "GX Control"; "filters" -> "عوامل تصفية المحتوى"; "iron" -> "الجدار الحديدي"; "gestures" -> "إيماءات التبويبات"; "keywords" -> "حجب بالكلمات"; "customrules" -> "عوامل تصفية مخصصة"; else -> "الإعدادات"
         }
         titleView.text = title
         when (page) {
             "main" -> main(col); "privacy" -> privacy(col); "spy" -> spy(col); "ai" -> ai(col); "appearance" -> appearance(col)
             "search" -> search(col); "storage" -> storage(col); "games" -> games(col); "browsing" -> browsing(col); "about" -> about(col)
-            "filters" -> filters(col); "customrules" -> customRules(col); "keywords" -> keywordsPage(col)
+            "gxmods" -> gxmods(col); "gxcontrol" -> gxcontrol(col)
+            "iron" -> iron(col); "gestures" -> gestures(col); "filters" -> filters(col); "customrules" -> customRules(col); "keywords" -> keywordsPage(col)
         }
         val sv = ScrollView(a).apply { isVerticalScrollBarEnabled = false }
         sv.addView(col, ViewGroup.LayoutParams(UiKit.MATCH, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -138,6 +139,11 @@ class SettingsScreen(
     // ───────── الصفحات ─────────
 
     private fun main(col: LinearLayout) {
+        section(col, "GX")
+        card(col, listOf(
+            nav("palette", "GX Mods", "خلفيات متحركة، ألوان تمييز، أصوات") { push("gxmods") },
+            nav("bolt", "GX Control", "الذاكرة وتنويم التبويبات") { push("gxcontrol") }
+        ))
         section(col, "الميزات")
         card(col, listOf(
             nav("shield_check", "الدرع والخصوصية", "إعلانات، متتبعات، أمان") { push("privacy") },
@@ -159,6 +165,8 @@ class SettingsScreen(
             action("share", "نسخ احتياطي", "ملف فيه إعداداتك ومفضلتك وفلاترك وكلماتك") { a.exportBackup() },
             action("download", "استرجاع نسخة", "من ملف نسخة احتياطية") { close(); a.importBackup() }
         ))
+        section(col, "المتصفح الافتراضي")
+        card(col, listOf(action("globe", "اجعله المتصفح الافتراضي", if (a.isDefaultBrowser()) "✓ هو الافتراضي حاليًا" else "الروابط من التطبيقات الأخرى تفتح هنا") { a.askDefaultBrowser() }))
         section(col, "حول")
         card(col, listOf(nav("info", "حول MaTrIX Co", "الإصدار " + a.appVersion()) { push("about") }))
     }
@@ -182,11 +190,13 @@ class SettingsScreen(
         ))
         section(col, "الخصوصية")
         card(col, listOf(
-            toggle("incognito", "تشويش بصمة المتصفح", "Canvas ومعلومات الجهاز", Cfg.FP, false),
+            toggle("incognito", "تشويش بصمة المتصفح", "Canvas ومعلومات الجهاز", Cfg.FP, true),
             toggle("t:🍪", "كوكيز الطرف الثالث", "الأفضل تفضل مقفولة", Cfg.TPCOOK, false) { a.applyThirdPartyCookies(it) },
             toggle("trash", "مسح تلقائي عند الخروج", "كوكيز + كاش + سجل", Cfg.AUTOCLEAR, false),
             toggle("lock", "قفل التطبيق", "بصمة أو PIN الجهاز عند الرجوع", Cfg.APPLOCK, false)
         ))
+        section(col, "الجدار الحديدي")
+        card(col, listOf(nav("shield", "الجدار الحديدي", "تقييم الخطر • سجل المنع • القائمة البيضاء") { push("iron") }))
         section(col, "قفل الإعدادات")
         run {
             val on = PinLock.enabled()
@@ -312,6 +322,80 @@ class SettingsScreen(
         })
     }
 
+    // ───────── الجدار الحديدي ─────────
+
+    private fun iron(col: LinearLayout) {
+        val db = ShieldDatabase.getInstance(a)
+        card(col, listOf(toggle("shield", "الجدار الحديدي", "منع تلقائي لأي صفحة فيها خطر — من غير سؤال ومن غير زر \"كمل\"", IronGuard.ON, true) { render() }))
+        section(col, "مستوى الحساسية")
+        val levels = listOf("حديدي — أي شك بيتمنع (عتبة 5)", "عالي (عتبة 15)", "متوازن (عتبة 35)")
+        card(col, levels.mapIndexed { i, n ->
+            action("shield", n, if (Cfg.int(IronGuard.LEVEL, 0) == i) "✓ المستوى الحالي" else null) { Cfg.setInt(IronGuard.LEVEL, i); render() }
+        })
+        col.addView(TextView(a).apply {
+            text = "الدرجة من 0 لـ 100، ولو وصلت للعتبة الصفحة بتتمنع. بيقيّم: غياب HTTPS، العنوان IP، الأسماء المقلّدة وpunycode، الروابط المريبة، التحويلات الكتير، قوائم التصيد، شهادة الأمان، النماذج المنتحلة، الإطارات المخفية، والسكريبتات المشفّرة."
+            textSize = 12f; setTextColor(theme.sub); setPadding(dp(8), dp(8), dp(8), dp(4)); setLineSpacing(0f, 1.2f)
+        })
+        section(col, "القائمة البيضاء (بتتعدّل من هنا بس)")
+        val allow = db.riskAllowList()
+        val rows = ArrayList<View>()
+        rows.add(action("plus", "إضافة موقع", "بيطلب الـ PIN لو القفل شغّال") {
+            a.pinLock.ask {
+                ui.sheet { box, d ->
+                    box.addView(ui.titleView("إضافة للقائمة البيضاء"))
+                    val inp = ui.input("example.com")
+                    box.addView(inp); box.addView(ui.space(12))
+                    box.addView(ui.button("إضافة") {
+                        val h = inp.text.toString().trim().lowercase().removePrefix("https://").removePrefix("http://").substringBefore('/')
+                        if (h.contains('.')) { db.riskAllowAdd(h); d.dismiss(); render() } else a.toastMsg("اكتب اسم موقع صحيح")
+                    })
+                }
+            }
+        })
+        for (h in allow) rows.add(action("check", h, "اضغط للإزالة") {
+            a.pinLock.ask { db.riskAllowRemove(h); a.toastMsg("اتشال: $h"); render() }
+        })
+        card(col, rows)
+        section(col, "سجل المنع")
+        val log = db.riskLog(40)
+        val fmt = java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.US)
+        if (log.isEmpty()) col.addView(TextView(a).apply { text = "مفيش حاجة اتمنعت لسه."; textSize = 13f; setTextColor(theme.sub); setPadding(dp(8), dp(4), dp(8), dp(8)) })
+        else {
+            card(col, log.map { r ->
+                action("shield", r[1], r[2] + "  •  " + r[3] + "/100  •  " + fmt.format(java.util.Date(r[0].toLong()))) {
+                    ui.sheet { box, d ->
+                        box.addView(ui.titleView(r[1]))
+                        box.addView(TextView(a).apply { text = r[2] + "\nالدرجة: " + r[3] + "/100\n" + r[4]; textSize = 12f; setTextColor(theme.sub); setPadding(0, dp(4), 0, dp(12)) })
+                        box.addView(ui.button("أضف للقائمة البيضاء") { d.dismiss(); a.pinLock.ask { db.riskAllowAdd(r[1]); a.toastMsg("اتضاف: " + r[1]); render() } })
+                    }
+                }
+            })
+            card(col, listOf(action("trash", "مسح السجل") { db.clearRiskLog(); render() }))
+        }
+    }
+
+    // ───────── إيماءات التبويبات ─────────
+
+    private val gestureOpts = listOf("close" to "إغلاق", "closeclear" to "إغلاق ومسح بيانات الموقع", "pin" to "تثبيت", "suspend" to "تجميد", "gamemode" to "تفعيل وضع الألعاب", "none" to "بدون إجراء")
+
+    private fun gestures(col: LinearLayout) {
+        val dirs = listOf(Triple("left", "شمال", "close"), Triple("right", "يمين", "pin"), Triple("up", "فوق", "closeclear"), Triple("down", "تحت", "suspend"))
+        card(col, dirs.map { (k, label, def) ->
+            val cur = Cfg.str("tg_$k", def)
+            action("tabs", "السحب $label", gestureOpts.firstOrNull { it.first == cur }?.second ?: "") {
+                ui.sheet { box, d ->
+                    box.addView(ui.titleView("السحب $label"))
+                    for ((id, name) in gestureOpts) box.addView(ui.button(name, id != cur) { Cfg.setStr("tg_$k", id); d.dismiss(); render() })
+                }
+            }
+        })
+        card(col, listOf(action("reload", "استعادة الافتراضي") { for (t in dirs) Cfg.setStr("tg_" + t.first, t.third); render() }))
+        col.addView(TextView(a).apply {
+            text = "السحب شمال/يمين بيشتغل على الكارت كله، وفوق/تحت من شريط عنوان الكارت (عشان ما يتعارضش مع سكرول القايمة). التاب المثبّت مبيتقفلش بالسحب ولا بـ \"إغلاق الكل\". بعد أي إغلاق فيه \"تراجع\" 5 ثواني."
+            textSize = 12f; setTextColor(theme.sub); setPadding(dp(8), dp(8), dp(8), dp(4)); setLineSpacing(0f, 1.2f)
+        })
+    }
+
     private fun spy(col: LinearLayout) {
         card(col, listOf(toggle("spy", "تفعيل كاشف التجسس", "≥90% حجب تلقائي، 50–89% يسألك", Cfg.SPY, true) { a.reloadCurrent() }))
         section(col, "كيف يعمل؟")
@@ -374,15 +458,66 @@ class SettingsScreen(
 
     private fun browsing(col: LinearLayout) {
         card(col, listOf(
+            nav("tabs", "إيماءات التبويبات", "سحب الكارت لإغلاق/تثبيت/تجميد") { push("gestures") },
             toggle("back", "إيماءات الحواف", "اسحب من الحافة للرجوع/التقدّم", Cfg.GESTURES, true),
             toggle("t:♪", "تكملة الصوت في الخلفية", "تجريبي — يعتمد على الجهاز", Cfg.BGAUDIO, false),
             toggle("moon", "تعتيم المواقع", "وضع ليلي لأي موقع", Cfg.DARK, false) { a.applyDarkPages(it) }
         ))
     }
 
+
+    private fun gxmods(col: LinearLayout) {
+        section(col, "خلفية الصفحة الرئيسية")
+        val cw = Cfg.str(Cfg.WALL, "none")
+        val opts = listOf("none" to "بدون", "grid" to "Neon Grid (متحركة)", "embers" to "Embers — جمرات (متحركة)", "matrix" to "Matrix (متحركة)", "aurora" to "Aurora — تدرّج متحرك", "custom" to "صورة من المعرض")
+        card(col, opts.map { (k, name) ->
+            radio(name, k == cw, if (k == "custom") "اختار صورة من جهازك" else null) {
+                if (k == "custom") a.pickWallpaper() else { Cfg.setStr(Cfg.WALL, k); a.reloadHomeIfShown(); render() }
+            }
+        })
+        section(col, "لون التمييز")
+        val colors = listOf(Color.rgb(250, 30, 78), Color.rgb(255, 140, 30), Color.rgb(250, 200, 40), Color.rgb(40, 210, 110), Color.rgb(30, 200, 230), Color.rgb(60, 130, 255), Color.rgb(150, 80, 255), Color.rgb(240, 80, 200))
+        val sw = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL; layoutDirection = View.LAYOUT_DIRECTION_LTR; setPadding(dp(4), dp(6), dp(4), dp(6)) }
+        val curAcc = Cfg.int(Cfg.ACCENT, 0)
+        for (c in colors) {
+            val dot = TextView(a).apply {
+                gravity = Gravity.CENTER; setTextColor(Color.WHITE); text = if (c == curAcc) "✓" else ""
+                background = Ui.round(c, dp(18).toFloat(), if (c == curAcc) Color.WHITE else 0, dp(2))
+                setOnClickListener { Fx.tap(it); Cfg.setInt(Cfg.ACCENT, c); a.applyTheme(Cfg.str(Cfg.THEME, "auto")) }
+            }
+            sw.addView(dot, LinearLayout.LayoutParams(0, dp(38), 1f).apply { setMargins(dp(3), 0, dp(3), 0) })
+        }
+        col.addView(sw)
+        card(col, listOf(action("reload", "لون الثيم الأصلي", "إلغاء اللون المخصص") { Cfg.setInt(Cfg.ACCENT, 0); a.applyTheme(Cfg.str(Cfg.THEME, "auto")) }))
+        section(col, "الأصوات")
+        val cs = Cfg.str(Cfg.SOUND, "off")
+        card(col, listOf("off" to "بدون صوت", "pulse" to "Pulse — نبضات ناعمة", "retro" to "Retro — أسلوب ألعاب قديمة").map { (k, name) ->
+            radio(name, k == cs) { Cfg.setStr(Cfg.SOUND, k); Fx.play("open"); render() }
+        })
+        card(col, listOf(toggle("t:📳", "الاهتزاز عند اللمس", "في الشريط السفلي وزر GX", Cfg.HAPTIC, true)))
+        section(col, "الصفحة الرئيسية")
+        card(col, listOf(toggle("globe", "GX Corner", "أخبار الألعاب + الإصدارات القادمة + العروض المجانية", Cfg.GXCORNER, true) { a.reloadHomeIfShown() }))
+    }
+
+    private fun gxcontrol(col: LinearLayout) {
+        card(col, listOf(
+            toggle("storage", "محدِّد الذاكرة (RAM Limiter)", "ينوّم التبويبات الخلفية لما المتاح من RAM يقل عن 15%", Cfg.RAMLIM, false),
+            toggle("bolt", "عدّاد FPS وPing", "داخل وضع اللعب", Cfg.FPS, true)
+        ))
+        section(col, "تنويم التبويبات الخاملة بعد")
+        val cur = Cfg.int(Cfg.TABSLEEP, 10)
+        card(col, listOf(0 to "متوقف", 5 to "5 دقايق", 10 to "10 دقايق", 30 to "30 دقيقة", 60 to "ساعة").map { (m, name) ->
+            radio(name, m == cur) { Cfg.setInt(Cfg.TABSLEEP, m); render() }
+        })
+        col.addView(TextView(a).apply {
+            text = "التبويب النايم بيفضل ظاهر في القائمة وبيتحمّل من جديد لما تفتحه. محدِّد CPU وسرعة الشبكة (اللي في نسخة الكمبيوتر) مش ممكنين داخل متصفح أندرويد."
+            textSize = 12f; setTextColor(theme.sub); setPadding(dp(8), dp(12), dp(8), dp(8))
+        })
+    }
+
     private fun about(col: LinearLayout) {
         col.addView(TextView(a).apply {
-            text = "MaTrIX Co — متصفح ألعاب بدرع حماية وكاشف تجسس.\nالإصدار " + a.appVersion() + "\n\nالأيقونات والواجهة مرسومة بالكود بدون مكتبات خارجية، والقوائم بتتحدث تلقائيًا كل 24 ساعة."
+            text = "MaTrIX Co — متصفح ألعاب بدرع حماية وكاشف تجسس.\nالإصدار " + a.appVersion() + " (GX Edition)\n\nالأيقونات والواجهة مرسومة بالكود بدون مكتبات خارجية، والقوائم بتتحدث تلقائيًا كل 24 ساعة."
             textSize = 14f; setTextColor(theme.sub); setPadding(dp(8), dp(14), dp(8), dp(8))
         })
         section(col, "التحديثات")

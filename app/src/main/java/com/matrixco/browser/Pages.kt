@@ -150,11 +150,54 @@ a{color:inherit;text-decoration:none}
 .bars div{flex:1;background:var(--ac);border-radius:4px 4px 1px 1px;min-height:3px;opacity:.85}
 .chip{display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:600;color:#fff}
 .small{font-size:11px;color:var(--sb)}
+.gx{display:flex;gap:6px;margin:4px 0 12px}
+.gx button{flex:1;background:var(--sf);color:var(--sb);border:0;padding:11px 4px;font-weight:700;font-size:12px;letter-spacing:.4px;font-family:inherit;clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px))}
+.gx button.on{background:var(--ac);color:#fff}
+.gxlist{display:none}.gxlist.on{display:block}
+.gxc{display:flex;gap:10px;align-items:center;background:var(--sf);padding:9px 10px;margin-bottom:8px;box-shadow:inset 3px 0 0 var(--ac);clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,12px 100%,0 calc(100% - 12px))}
+.gxc img{width:68px;height:46px;object-fit:cover;border-radius:4px;flex:none;background:var(--sf2)}
+.gxc b{font-size:13px;display:block;font-weight:600;line-height:1.35}
+.gxc small{color:var(--sb);font-size:10px}
+canvas#bg,.aur,.wimg{position:fixed;left:0;top:0;width:100%;height:100%;z-index:-1}
+body.wall{background:transparent}
+.aur{background:linear-gradient(135deg,var(--bg),var(--ac2x),var(--bg),var(--acx));background-size:300% 300%;animation:ag 14s ease infinite}
+@keyframes ag{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+.brand b{letter-spacing:1px}
+.glow{box-shadow:0 0 18px var(--ac)}
 """
 
-    private fun page(t: MxTheme, title: String, body: String): String =
+    private fun page(t: MxTheme, title: String, body: String, bodyClass: String = ""): String =
         "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\">" +
-            "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>" + esc(title) + "</title><style>" + css(t) + "</style></head><body>" + body + "</body></html>"
+            "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>" + esc(title) + "</title><style>" + css(t) +
+            ":root{--acx:" + rgbaStr(t.accent, ".22") + ";--ac2x:" + rgbaStr(t.accent, ".10") + "}</style></head><body class=\"" + bodyClass + "\">" + body + "</body></html>"
+
+
+    private fun wallpaper(ctx: Context, t: MxTheme): String {
+        val kind = Cfg.str(Cfg.WALL, "none")
+        if (kind == "none") return ""
+        val acc = rgbaStr(t.accent, ".55"); val accSoft = rgbaStr(t.accent, ".18"); val accA = rgbaStr(t.accent, ".8"); val bg = t.bg.hex()
+        return when (kind) {
+            "aurora" -> "<div class=\"aur\"></div>"
+            "custom" -> {
+                val f = File(ctx.filesDir, "wall.jpg")
+                if (!f.exists()) "" else "<div class=\"wimg\" style=\"background:linear-gradient(rgba(0,0,0,.5),rgba(0,0,0,.6)),url(data:image/jpeg;base64," + Base64.encodeToString(f.readBytes(), Base64.NO_WRAP) + ") center/cover\"></div>"
+            }
+            "grid" -> "<canvas id=\"bg\"></canvas><script>(function(){var c=document.getElementById('bg'),x=c.getContext('2d'),W,H,t=0;function rs(){W=c.width=innerWidth;H=c.height=innerHeight}rs();addEventListener('resize',rs);" +
+                "function d(){x.clearRect(0,0,W,H);var g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'" + accSoft + "');x.fillStyle=g;x.fillRect(0,0,W,H);x.strokeStyle='" + acc + "';x.lineWidth=1;var hz=H*0.5;" +
+                "for(var i=-12;i<=12;i++){x.beginPath();x.moveTo(W/2+i*18,hz);x.lineTo(W/2+i*W/5,H);x.stroke();}" +
+                "for(var j=0;j<10;j++){var y=hz+Math.pow((j+(t%1))/10,2.2)*(H-hz);x.beginPath();x.moveTo(0,y);x.lineTo(W,y);x.stroke();}" +
+                "t+=0.012;setTimeout(function(){requestAnimationFrame(d)},document.hidden?600:33)}d()})();</script>"
+            "embers" -> "<canvas id=\"bg\"></canvas><script>(function(){var c=document.getElementById('bg'),x=c.getContext('2d'),W,H,P=[];function rs(){W=c.width=innerWidth;H=c.height=innerHeight}rs();addEventListener('resize',rs);" +
+                "for(var i=0;i<55;i++)P.push({x:Math.random()*innerWidth,y:Math.random()*innerHeight,r:Math.random()*2+.6,s:Math.random()*.9+.3});" +
+                "function d(){x.clearRect(0,0,W,H);x.fillStyle='" + accA + "';for(var i=0;i<P.length;i++){var p=P[i];p.y-=p.s;p.x+=Math.sin(p.y/30)*.4;if(p.y<0){p.y=H;p.x=Math.random()*W}x.beginPath();x.arc(p.x,p.y,p.r,0,6.3);x.fill()}" +
+                "setTimeout(function(){requestAnimationFrame(d)},document.hidden?600:33)}d()})();</script>"
+            "matrix" -> "<canvas id=\"bg\"></canvas><script>(function(){var c=document.getElementById('bg'),x=c.getContext('2d'),W,H,D=[];function rs(){W=c.width=innerWidth;H=c.height=innerHeight;D=[];for(var i=0;i<W/16;i++)D.push(Math.random()*H/16)}rs();addEventListener('resize',rs);" +
+                "var S='01アイウエオカキクケコサシスセソタチツテト<>/=+*';function d(){x.fillStyle='" + bg + "33';x.fillRect(0,0,W,H);x.fillStyle='" + acc + "';x.font='14px monospace';" +
+                "for(var i=0;i<D.length;i++){x.fillText(S.charAt(Math.random()*S.length|0),i*16,D[i]*16);if(D[i]*16>H&&Math.random()>.97)D[i]=0;D[i]+=.5}" +
+                "setTimeout(function(){requestAnimationFrame(d)},document.hidden?600:50)}d()})();</script>"
+            else -> ""
+        }
+    }
 
     /** أيقونة موقع: صورة حقيقية لو موجودة وإلا أول حرف */
     private fun icon(ctx: Context, url: String, name: String): String {
@@ -197,13 +240,15 @@ a{color:inherit;text-decoration:none}
 
     private fun home(ctx: Context, db: ShieldDatabase, t: MxTheme): String {
         val sb = StringBuilder()
+        val wall = wallpaper(ctx, t)
+        sb.append(wall)
         val sc = readEntries("shortcuts", defaultShortcuts)
         val games = readEntries("games", defaultGames)
         val quick = db.getBookmarks(5)
         // نجلب الأيقونات الناقصة في الخلفية
         Favicons.ensure(ctx, (sc.map { hostOf(it.url) } + games.map { hostOf(it.url) } + quick.map { hostOf(it.url) }).filter { it.isNotEmpty() })
 
-        sb.append("<div class=\"top\"><a class=\"m\" href=\"mx://tools\">⋮</a><div class=\"brand\"><span>MaTrIX Co</span><img src=\"").append(logo(ctx)).append("\"></div></div>")
+        sb.append("<div class=\"top\"><a class=\"m\" href=\"mx://tools\">⋮</a><div class=\"brand\"><span><b>MaTrIX</b> GX</span><img src=\"").append(logo(ctx)).append("\"></div></div>")
         sb.append("<form class=\"search\" onsubmit=\"return go()\"><input id=\"q\" placeholder=\"ابحث أو اكتب عنوان الموقع\" autocomplete=\"off\" autocapitalize=\"off\"><a class=\"b\" href=\"mx://voice\">🎤</a></form>")
 
         val custom = Cfg.str("shortcuts", "").isNotEmpty()
@@ -215,6 +260,26 @@ a{color:inherit;text-decoration:none}
         }
         sb.append("<a class=\"tile\" href=\"mx://addsc\"><div class=\"ic\" style=\"font-size:24px\">＋</div>إضافة</a></div>")
 
+
+        if (Cfg.bool(Cfg.GXCORNER, true)) {
+            GxCorner.ensure(ctx)
+            val d = GxCorner.cached(ctx)
+            sb.append("<div class=\"sec\"><b>GX CORNER</b><a href=\"mx://gxrefresh\">تحديث ↻</a></div>")
+            sb.append("<div class=\"gx\"><button class=\"on\" onclick=\"gx(0,this)\">الأخبار</button><button onclick=\"gx(1,this)\">الإصدارات</button><button onclick=\"gx(2,this)\">العروض</button></div>")
+            val lists = listOf(d?.news, d?.releases, d?.deals)
+            for ((idx, list) in lists.withIndex()) {
+                sb.append("<div class=\"gxlist").append(if (idx == 0) " on" else "").append("\" id=\"gl").append(idx).append("\">")
+                if (list.isNullOrEmpty()) sb.append("<div class=\"empty\" style=\"padding:16px\">جاري التحميل… (لازم نت)</div>")
+                else for (e in list.take(8)) {
+                    sb.append("<a class=\"gxc\" href=\"").append(esc(e.url)).append("\">")
+                    if (e.img.startsWith("http")) sb.append("<img loading=\"lazy\" src=\"").append(esc(e.img)).append("\">")
+                    sb.append("<div><b>").append(esc(e.title)).append("</b>")
+                    if (e.sub.isNotEmpty()) sb.append("<small>").append(esc(e.sub)).append("</small>")
+                    sb.append("</div></a>")
+                }
+                sb.append("</div>")
+            }
+        }
         val st = Storage.compute(ctx)
         sb.append("<div class=\"strip\">")
         sb.append("<a href=\"https://mx.home/shield\"><b>").append(db.todayBlocked()).append("</b><span>🛡 محجوب اليوم</span></a>")
@@ -232,8 +297,8 @@ a{color:inherit;text-decoration:none}
         if (list.isEmpty()) sb.append("<div class=\"empty\" style=\"padding:18px\">لا يوجد شيء بعد</div>")
         for (e in list) sb.append(item(ctx, e.name, e.url, e.url, null))
 
-        sb.append("<script>function go(){var v=document.getElementById('q').value.trim();if(v){location.href='mx://go?q='+encodeURIComponent(v);}return false;}</script>")
-        return page(t, "MaTrIX Co", sb.toString())
+        sb.append("<script>function go(){var v=document.getElementById('q').value.trim();if(v){location.href='mx://go?q='+encodeURIComponent(v);}return false;}function gx(i,b){var l=document.querySelectorAll('.gxlist'),k=document.querySelectorAll('.gx button');for(var j=0;j<l.length;j++){l[j].className='gxlist'+(j==i?' on':'');k[j].className=(j==i?'on':'')}}</script>")
+        return page(t, "MaTrIX GX", sb.toString(), if (wall.isEmpty()) "" else "wall")
     }
 
     private fun history(ctx: Context, db: ShieldDatabase, t: MxTheme): String {

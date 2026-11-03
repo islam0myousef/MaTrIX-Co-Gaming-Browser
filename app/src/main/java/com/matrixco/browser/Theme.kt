@@ -18,7 +18,14 @@ object Themes {
     private val midnight = MxTheme("midnight", "Midnight", c(31, 33, 40), c(43, 46, 55), c(54, 58, 68), c(96, 140, 240), c(160, 190, 250), Color.WHITE, c(168, 172, 184), false)
     private val light = MxTheme("classic", "Light", c(244, 245, 248), Color.WHITE, c(230, 232, 238), c(50, 100, 220), c(70, 110, 200), c(24, 26, 32), c(100, 106, 120), true)
 
+    private val gxClassic = MxTheme("gxclassic", "GX Classic", c(9, 9, 12), c(21, 21, 26), c(36, 36, 44), c(250, 30, 78), c(255, 120, 150), Color.WHITE, c(160, 160, 172), false)
+    private val whiteWolf = MxTheme("whitewolf", "White Wolf", c(236, 238, 243), Color.WHITE, c(224, 227, 234), c(250, 30, 78), c(200, 40, 90), c(18, 18, 24), c(100, 104, 118), true)
+
     val all: List<MxTheme> = listOf(
+        gxClassic,
+        MxTheme("ultraviolet", "Ultra Violet", c(10, 6, 24), c(22, 14, 46), c(36, 24, 70), c(138, 60, 255), c(190, 140, 255), Color.WHITE, c(160, 150, 190), false),
+        MxTheme("purplehaze", "Purple Haze", c(20, 6, 28), c(38, 12, 52), c(58, 20, 78), c(220, 60, 200), c(255, 140, 230), Color.WHITE, c(180, 150, 190), false),
+        whiteWolf,
         midnight,
         MxTheme("redgold", "Red Gold", c(10, 5, 7), c(24, 11, 14), c(40, 18, 22), c(232, 30, 40), c(248, 192, 72), Color.WHITE, c(176, 150, 150), false),
         MxTheme("crimson", "Crimson", c(12, 4, 10), c(28, 9, 22), c(44, 14, 34), c(220, 20, 90), c(255, 120, 160), Color.WHITE, c(176, 140, 160), false),
@@ -36,14 +43,16 @@ object Themes {
     val picker: List<MxTheme> = listOf(auto) + all
 
     fun resolve(ctx: Context, id: String?): MxTheme {
-        if (id == null || id == "auto") {
+        val base: MxTheme = if (id == null || id == "auto") {
             val night = (ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-            return if (night) midnight else light
-        }
-        return all.firstOrNull { it.id == id } ?: midnight
+            if (night) gxClassic else whiteWolf
+        } else all.firstOrNull { it.id == id } ?: gxClassic
+        val ov = Cfg.int(Cfg.ACCENT, 0)
+        return if (ov != 0) base.copy(accent = ov, accent2 = Color.rgb(
+            minOf(255, Color.red(ov) + 70), minOf(255, Color.green(ov) + 70), minOf(255, Color.blue(ov) + 70))) else base
     }
 
-    fun byId(id: String?): MxTheme = all.firstOrNull { it.id == id } ?: midnight
+    fun byId(id: String?): MxTheme = all.firstOrNull { it.id == id } ?: gxClassic
 }
 
 fun Int.hex(): String = String.format("#%06X", 0xFFFFFF and this)
@@ -112,4 +121,11 @@ object Cfg {
     const val FPS = "fps_overlay"
     const val GESTURES = "gestures"
     const val SHOWFAB = "show_fab"
+    const val WALL = "wallpaper"
+    const val ACCENT = "accent_override"
+    const val SOUND = "sound_pack"
+    const val HAPTIC = "haptics"
+    const val GXCORNER = "show_gxcorner"
+    const val RAMLIM = "ram_limiter"
+    const val TABSLEEP = "tab_sleep_min"
 }

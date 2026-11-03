@@ -2,6 +2,7 @@ package com.matrixco.browser
 
 import android.animation.ValueAnimator
 import android.app.Activity
+import android.app.ActivityManager
 import android.app.AlertDialog
 import android.app.Dialog
 import android.app.DownloadManager
@@ -97,6 +98,10 @@ class Tab(val web: WebView, val priv: Boolean, val popup: Boolean) {
     var lastPopupAt = 0L
     var opener: Tab? = null
     var thumb: Bitmap? = null
+    var sleeping = false
+    var pinned = false
+    @Volatile var redirects = 0
+    var lastActive = System.currentTimeMillis()
     var upgradedFrom: String? = null
     var sslBroken = false
     var lastSpyPromptAt = 0L
@@ -145,7 +150,7 @@ class MainActivity : Activity() {
     private lateinit var spyText: TextView
     private lateinit var hud: TextView
     private lateinit var fab: ImageView
-    private val slotViews = ArrayList<ImageView>()
+    private val slotViews = ArrayList<View>()
     private var tabsIcon: IconDrawable? = null
     private var menuPopup: PopupWindow? = null
     private var shieldPopup: PopupWindow? = null
@@ -154,6 +159,7 @@ class MainActivity : Activity() {
     private var fabMenu: View? = null
     private var fullscreen = false
     private var lastNight = 0
+    private var started = false
     private val homeRefresh = Runnable { val t = cur; if (t != null && t.url == Pages.HOME_URL) t.web.reload() }
     private var fabOpen = false
     private var customView: View? = null
@@ -187,6 +193,7 @@ class MainActivity : Activity() {
             tickCount++
             if (tickCount % 20 == 0) io.execute { AdBlocker.flush() }
             if (gameMode && Cfg.bool(Cfg.FPS, true) && tickCount % 6 == 0) pingGame()
+            if (tickCount % 40 == 0) sleepCheck()
             h.postDelayed(this, 800)
         }
     }
@@ -215,6 +222,7 @@ class MainActivity : Activity() {
 
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         Favicons.onUpdated = { h.removeCallbacks(homeRefresh); h.postDelayed(homeRefresh, 1500) }
+        GxCorner.onUpdated = { h.removeCallbacks(homeRefresh); h.postDelayed(homeRefresh, 800) }
         buildUi()
         CookieManager.getInstance().setAcceptCookie(true)
         registerReceiver(dlReceiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
@@ -238,6 +246,7 @@ class MainActivity : Activity() {
             }
         }, 4000)
         if (Cfg.bool(Cfg.APPLOCK, false) && savedInstanceState == null) lockApp()
+        started = true
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -280,7 +289,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        if (!updChecked) { updChecked = true; h.postDelayed({ updateUi.checkAuto() }, 4000) }
+        if (!updChecked) { updChecked = true; h.postDelayed({ updateUi.checkAuto() }, 4000); h.postDelayed({ maybeAskDefaultBrowser() }, 7000) }
         stopService(Intent(this, AudioService::class.java))
         cur?.web?.onResume()
         h.removeCallbacks(ticker)
@@ -351,6 +360,7 @@ class MainActivity : Activity() {
                 if (resultCode == RESULT_OK && r != null) cur?.let { loadInTab(it, r) }
             }
             REQ_LOCK -> { if (resultCode == RESULT_OK) unlockApp() else lockApp() }
+            REQ_PINRESET -> if (resultCode == RESULT_OK) { pinLock.resetByDevice(); toast("اتلغى قفل الـ PIN — فعّله تاني من الإعدادات بـ PIN جديد") }
             REQ_BK_EXPORT -> if (resultCode == RESULT_OK) data?.data?.let { uri ->
                 io.execute {
                     try {
@@ -371,7 +381,7 @@ class MainActivity : Activity() {
                     } catch (_: Exception) { h.post { toast("الملف ده مش نسخة احتياطية صالحة") } }
                 }
             }
-            REQ_PINRESET -> if (resultCode == RESULT_OK) { pinLock.resetByDevice(); toast("اتلغى قفل الـ PIN — فعّله تاني من الإعدادات بـ PIN جديد") }
+            REQ_WALL -> { val u = data?.data; if (resultCode == RESULT_OK && u != null) io.execute { saveWallpaper(u) } }
             else -> { super.onActivityResult(requestCode, resultCode, data) }
         }
     }
@@ -523,23 +533,35 @@ class MainActivity : Activity() {
         spyBar.addView(spyText, LinearLayout.LayoutParams(0, WRAP, 1f))
         column.addView(spyBar, LinearLayout.LayoutParams(MATCH, WRAP))
 
-        // ── الشريط السفلي (بأسلوب Brave: القائمة، التبويبات، البحث، الإشارات، الرئيسية)
+        // ── الشريط السفلي (أسلوب GX: رجوع، تقدّم، زر GX المركزي، التبويبات، القائمة)
         bottomBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER
-            setBackgroundColor(theme.bg)
+            setBackgroundColor(theme.surface)
         }
-        val defs = listOf("dots", "tabs", "search", "bookmark", "home")
+        val defs = listOf("back", "forward", "bolt", "tabs", "dots")
         for (i in 0 until 5) {
             val iv = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER }
-            iv.setImageDrawable(IconDrawable(defs[i], theme.text, dp(26)).also { if (i == 1) tabsIcon = it })
-            slotViews.add(iv)
-            bottomBar.addView(iv, LinearLayout.LayoutParams(0, dp(52), 1f))
+            if (i == 2) {
+                iv.setImageDrawable(IconDrawable("bolt", Color.WHITE, dp(24)))
+                iv.background = Ui.round(theme.accent, dp(23).toFloat(), theme.accent2, dp(1))
+                iv.elevation = dp(6).toFloat()
+                val wrap = FrameLayout(this)
+                wrap.addView(iv, FrameLayout.LayoutParams(dp(46), dp(46), Gravity.CENTER))
+                slotViews.add(wrap); bottomBar.addView(wrap, LinearLayout.LayoutParams(0, dp(58), 1f))
+            } else {
+                iv.setImageDrawable(IconDrawable(defs[i], theme.text, dp(26)).also { if (i == 3) tabsIcon = it })
+                slotViews.add(iv); bottomBar.addView(iv, LinearLayout.LayoutParams(0, dp(58), 1f))
+            }
         }
-        slotViews[0].setOnClickListener { showMenu() }
-        slotViews[1].setOnClickListener { showTabs() }
-        slotViews[2].setOnClickListener { addressBar.requestFocus(); (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(addressBar, 0) }
-        slotViews[3].setOnClickListener { openInternal("/bookmarks") }
-        slotViews[4].setOnClickListener { cur?.web?.loadUrl(Pages.HOME_URL) }
+        slotViews[0].setOnClickListener { Fx.tap(it); cur?.let { t -> if (t.web.canGoBack()) t.web.goBack() } }
+        slotViews[1].setOnClickListener { Fx.tap(it); cur?.let { t -> if (t.web.canGoForward()) t.web.goForward() } }
+        slotViews[2].setOnClickListener { Fx.tap(it, "open"); showGxControl() }
+        slotViews[2].setOnLongClickListener {
+            Fx.tap(it); addressBar.requestFocus()
+            (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(addressBar, 0); true
+        }
+        slotViews[3].setOnClickListener { Fx.tap(it); showTabs() }
+        slotViews[4].setOnClickListener { Fx.tap(it, "open"); showMenu() }
         column.addView(bottomBar, LinearLayout.LayoutParams(MATCH, WRAP))
 
         // HUD للعبة (Ping/FPS)
@@ -567,7 +589,7 @@ class MainActivity : Activity() {
         val logo = ImageView(this)
         try { logo.setImageBitmap(BitmapFactory.decodeStream(assets.open("logo.png"))) } catch (_: Exception) {}
         col.addView(logo, LinearLayout.LayoutParams(dp(84), dp(84)))
-        col.addView(TextView(this).apply { text = "MaTrIX Co"; textSize = 19f; setTextColor(theme.text); gravity = Gravity.CENTER; setPadding(0, dp(12), 0, 0) })
+        col.addView(TextView(this).apply { text = "MaTrIX GX"; textSize = 19f; setTextColor(theme.text); gravity = Gravity.CENTER; setPadding(0, dp(12), 0, 0) })
         sp.addView(col, FrameLayout.LayoutParams(MATCH, MATCH))
         root.addView(sp, FrameLayout.LayoutParams(MATCH, MATCH))
         h.postDelayed({ sp.animate().alpha(0f).setDuration(250).withEndAction { root.removeView(sp) }.start() }, 600)
@@ -602,7 +624,12 @@ class MainActivity : Activity() {
 
     private fun updateBottomBar() {
         tabsIcon?.let { it.label = tabs.size.toString(); it.invalidateSelf() }
-        if (slotViews.size >= 5) slotViews[1].invalidate()
+        if (slotViews.size >= 5) {
+            val t = cur
+            slotViews[0].alpha = if (t != null && t.web.canGoBack()) 1f else 0.35f
+            slotViews[1].alpha = if (t != null && t.web.canGoForward()) 1f else 0.35f
+            slotViews[3].invalidate()
+        }
     }
 
     private fun lockText(t: Tab): Pair<String, Int> = when {
@@ -656,6 +683,7 @@ class MainActivity : Activity() {
         if (select) selectTab(tab)
         if (url != null) { if (select) loadInTab(tab, url) else tab.pending = url }
         updateBottomBar()
+        if (started && select) Fx.play("open")
         return tab
     }
 
@@ -671,13 +699,14 @@ class MainActivity : Activity() {
     }
 
     private fun selectTab(tab: Tab) {
-        cur?.let { if (it !== tab) { captureThumb(it); it.web.visibility = View.GONE; it.web.onPause() } }
+        cur?.let { if (it !== tab) { captureThumb(it); it.lastActive = System.currentTimeMillis(); it.web.visibility = View.GONE; it.web.onPause() } }
         cur = tab
+        tab.lastActive = System.currentTimeMillis()
         tab.web.visibility = View.VISIBLE
         tab.web.onResume()
         applyRendererPriority()
         val p = tab.pending
-        if (p != null) { tab.pending = null; loadInTab(tab, p) }
+        if (p != null) { tab.pending = null; tab.sleeping = false; loadInTab(tab, p) }
         hideFabMenu(); hideSuggest()
         refreshChrome()
     }
@@ -698,6 +727,7 @@ class MainActivity : Activity() {
         webHolder.removeView(tab.web)
         try { tab.web.stopLoading(); tab.web.destroy() } catch (_: Exception) {}
         tab.thumb = null
+        if (started) Fx.play("close")
         if (tabs.isEmpty()) { cur = null; newTab(Pages.HOME_URL) }
         else if (cur === tab) {
             cur = null
@@ -715,7 +745,7 @@ class MainActivity : Activity() {
             val arr = JSONArray(); var curIdx = 0
             for (t in tabs) {
                 if (t.priv) continue
-                val u = if (t.url.isNotEmpty()) t.url else (t.pending ?: Pages.HOME_URL)
+                val u = t.pending ?: (if (t.url.isNotEmpty()) t.url else Pages.HOME_URL)
                 if (u.startsWith("file:")) continue
                 arr.put(u); if (t === cur) curIdx = arr.length() - 1
             }
@@ -753,7 +783,9 @@ class MainActivity : Activity() {
 
     private fun loadInTab(tab: Tab, input: String) {
         if (input.isBlank()) return
+        if (IronGuard.blockedTypedScheme(input)) { toast("🚫 البروتوكول ده محظور"); return }
         val target = smartUrl(tab, resolve(input))
+        IronGuard.scoreUrl(this, target, 0)?.let { showRiskBlocked(tab, hostOf(target), target, it); return }
         AdultGuard.checkUrl(target)?.let { showBlocked(tab, hostOf(target), it); return }
         tab.web.loadUrl(target)
     }
@@ -890,6 +922,78 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun showRiskBlocked(tab: Tab, host: String, url: String, v: IronGuard.Verdict) {
+        tab.web.stopLoading()
+        tab.web.loadDataWithBaseURL("https://mx.blocked/", IronGuard.blockHtml(host, v), "text/html", "utf-8", null)
+        IronGuard.log(this, host, url, v)
+        AdBlocker.noteBlocked(host, Cat.ADS)
+    }
+
+    /** تحليل محتوى الصفحة بعد التحميل (إطارات مخفية، سكريبت مشفّر، نموذج باسورد منتحل) */
+    private fun scanRisk(tab: Tab) {
+        if (!tabs.contains(tab) || !IronGuard.enabled()) return
+        val host = tab.host
+        if (host.isEmpty() || host == Pages.HOST || host == "mx.blocked" || isInternal(tab.url)) return
+        tab.web.evaluateJavascript(IronGuard.PROBE) { raw ->
+            val v = IronGuard.evaluate(this, host, tab.url, raw) ?: return@evaluateJavascript
+            if (!tabs.contains(tab) || tab.host != host) return@evaluateJavascript
+            showRiskBlocked(tab, host, tab.url, v)
+        }
+    }
+
+    /** مسح كوكيز وتخزين موقع معيّن */
+    internal fun clearSiteData(host: String) {
+        if (host.isEmpty()) return
+        try {
+            val cm = CookieManager.getInstance()
+            for (base in listOf("https://$host", "https://www.$host")) {
+                val raw = cm.getCookie(base) ?: continue
+                for (c in raw.split(';')) {
+                    val name = c.substringBefore('=').trim()
+                    if (name.isNotEmpty()) cm.setCookie(base, "$name=; Max-Age=0; Path=/")
+                }
+            }
+            cm.flush()
+            android.webkit.WebStorage.getInstance().deleteOrigin("https://$host")
+        } catch (_: Exception) {}
+    }
+
+    // ───────── المتصفح الافتراضي ─────────
+    internal fun isDefaultBrowser(): Boolean {
+        if (Build.VERSION.SDK_INT >= 29) {
+            val rm = getSystemService(android.app.role.RoleManager::class.java)
+            return rm != null && rm.isRoleHeld(android.app.role.RoleManager.ROLE_BROWSER)
+        }
+        val r = packageManager.resolveActivity(Intent(Intent.ACTION_VIEW, Uri.parse("http://example.com")), android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+        return r != null && packageName == r.activityInfo.packageName
+    }
+
+    internal fun askDefaultBrowser() {
+        if (Build.VERSION.SDK_INT >= 29) {
+            val rm = getSystemService(android.app.role.RoleManager::class.java)
+            if (rm != null && rm.isRoleAvailable(android.app.role.RoleManager.ROLE_BROWSER)) {
+                try { startActivityForResult(rm.createRequestRoleIntent(android.app.role.RoleManager.ROLE_BROWSER), 4123); return } catch (_: Exception) {}
+            }
+        }
+        try { startActivity(Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)) } catch (_: Exception) { toast("افتح إعدادات أندرويد ← التطبيقات الافتراضية") }
+    }
+
+    /** اقتراح مرة عند أول تشغيل، ولو اترفض يرجع بحد أقصى مرتين بعد أيام */
+    private fun maybeAskDefaultBrowser() {
+        if (isDefaultBrowser() || Cfg.bool("db_never", false)) return
+        val n = Cfg.int("db_n", 0)
+        val last = Cfg.str("db_last", "0").toLongOrNull() ?: 0L
+        if (n >= 3 || (n > 0 && System.currentTimeMillis() - last < 3 * 86400_000L)) return
+        Cfg.setInt("db_n", n + 1); Cfg.setStr("db_last", System.currentTimeMillis().toString())
+        ui.sheet { box, d ->
+            box.addView(ui.titleView("اجعل MaTrIX Co متصفحك الافتراضي؟"))
+            box.addView(TextView(this).apply { text = "الروابط من أي تطبيق هتفتح هنا بالحماية والجدار الحديدي."; textSize = 13f; setTextColor(theme.sub); setPadding(0, dp(4), 0, dp(12)) })
+            box.addView(ui.button("اجعله الافتراضي") { d.dismiss(); askDefaultBrowser() })
+            box.addView(ui.button("لاحقًا", false) { d.dismiss() })
+            box.addView(ui.button("متسألنيش تاني", false) { Cfg.setBool("db_never", true); d.dismiss() })
+        }
+    }
+
     private fun isGameHost(host: String) = GAME_HOSTS.any { host == it || host.endsWith(".$it") }
     private fun hostOf(u: String) = try { Uri.parse(u).host.orEmpty().lowercase() } catch (_: Exception) { "" }
 
@@ -911,7 +1015,7 @@ class MainActivity : Activity() {
         val spy = on && AdBlocker.spyOn() && !isGameHost(host)
         val pol = if (spy) db.blockedTypesFor(host) else emptyList()
         tab.web.evaluateJavascript(
-            Scripts.main(host, tab.skipMode, Cfg.bool(Cfg.DARK, false), yt, on && AdBlocker.adsOn(), on && AdBlocker.annoyOn(), spy, Cfg.bool(Cfg.FP, false), Cfg.bool(Cfg.BGAUDIO, false), pol), null
+            Scripts.main(host, tab.skipMode, Cfg.bool(Cfg.DARK, false), yt, on && AdBlocker.adsOn(), on && AdBlocker.annoyOn(), spy, Cfg.bool(Cfg.FP, true), Cfg.bool(Cfg.BGAUDIO, false), pol), null
         )
         if (tab.desktop) tab.web.evaluateJavascript(Scripts.desktopViewport(desktopWidth()), null)
         if (on) {
@@ -986,6 +1090,7 @@ class MainActivity : Activity() {
 
         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
             val u = url.orEmpty()
+            if (tab.sleeping && u == "about:blank") return
             tab.url = u; tab.host = hostOf(u); tab.blocked.set(0); tab.progress = 5
             tab.sslBroken = false; tab.bookmarked = false
             synchronized(tab.videos) { tab.videos.clear() }
@@ -1001,14 +1106,16 @@ class MainActivity : Activity() {
             inject(tab)
         }
 
-        override fun onPageCommitVisible(view: WebView?, url: String?) { inject(tab); injectUserScripts(tab) }
+        override fun onPageCommitVisible(view: WebView?, url: String?) { if (tab.sleeping) return; inject(tab); injectUserScripts(tab) }
 
         override fun onPageFinished(view: WebView?, url: String?) {
             val u = url.orEmpty()
+            if (tab.sleeping && u == "about:blank") { tab.progress = 100; return }
             tab.url = u; tab.progress = 100
             inject(tab); injectUserScripts(tab)
             h.postDelayed({ if (tabs.contains(tab) && tab === cur) captureThumb(tab) }, 900)
             scanAdult(tab); h.postDelayed({ scanAdult(tab) }, 1800)
+            tab.redirects = 0; scanRisk(tab); h.postDelayed({ scanRisk(tab) }, 2500)
             if (gameMode && Cfg.bool(Cfg.FPS, true)) tab.web.evaluateJavascript(Scripts.fps(true), null)
             val title = tab.title
             if (!tab.priv && !isInternal(u) && u.startsWith("http")) {
@@ -1044,6 +1151,8 @@ class MainActivity : Activity() {
                         }
                     }
                     if (req.isForMainFrame) {
+                        if (Build.VERSION.SDK_INT >= 24 && req.isRedirect) tab.redirects++ else tab.redirects = 0
+                        IronGuard.scoreUrl(this@MainActivity, uri.toString(), tab.redirects)?.let { showRiskBlocked(tab, host, uri.toString(), it); return true }
                         AdultGuard.checkUrl(uri.toString())?.let { showBlocked(tab, host, it); return true }
                         val safe = FilterEngine.safeSearch(uri.toString())
                         if (safe != uri.toString()) { view?.loadUrl(safe); return true }
@@ -1055,7 +1164,18 @@ class MainActivity : Activity() {
                 "file" -> return !isOfflineFile(uri)
                 "about", "data", "blob" -> return false
                 else -> {
-                    if (req.hasGesture()) {
+                    if (IronGuard.externalSchemeAllowed(uri.scheme)) {
+                        if (req.hasGesture()) {
+                            try {
+                                val i = Intent(Intent.ACTION_VIEW, uri)
+                                i.addCategory(Intent.CATEGORY_BROWSABLE); i.component = null; i.selector = null
+                                startActivity(i)
+                            } catch (_: Exception) { toast("مفيش تطبيق يفتح الرابط ده") }
+                        }
+                    } else if (IronGuard.enabled()) {
+                        IronGuard.log(this@MainActivity, uri.host.orEmpty(), uri.toString(), IronGuard.Verdict(100, "محاولة فتح تطبيق خارجي (" + (uri.scheme ?: "?") + ")"))
+                        if (req.hasGesture()) toast("🛡️ اتمنع رابط تطبيق خارجي")
+                    } else if (req.hasGesture()) {
                         try {
                             val i = if (uri.scheme == "intent") Intent.parseUri(uri.toString(), Intent.URI_INTENT_SCHEME) else Intent(Intent.ACTION_VIEW, uri)
                             i.addCategory(Intent.CATEGORY_BROWSABLE); i.component = null; i.selector = null
@@ -1091,6 +1211,12 @@ class MainActivity : Activity() {
             val hnd = handler ?: return
             val err = error ?: run { hnd.cancel(); return }
             val host = hostOf(err.url)
+            if (IronGuard.enabled()) {
+                hnd.cancel()
+                IronGuard.log(this@MainActivity, host, err.url ?: "", IronGuard.Verdict(100, "شهادة الأمان غير صالحة أو منتهية"))
+                if (hostOf(view?.url.orEmpty()) == host || hostOf(tab.url) == host || tab.pending != null) h.post { showRiskBlocked(tab, host, err.url ?: "", IronGuard.Verdict(100, "شهادة الأمان غير صالحة أو منتهية")) }
+                return
+            }
             val flags = db.getLegacy(host)
             if ((flags and 2) != 0 || sslOnce.contains(host)) { tab.sslBroken = true; hnd.proceed(); h.post { refreshChrome() }; return }
             val isMain = hostOf(view?.url.orEmpty()) == host
@@ -1322,6 +1448,7 @@ class MainActivity : Activity() {
             "back" -> if (tab.web.canGoBack()) tab.web.goBack() else tab.web.loadUrl(Pages.HOME_URL)
             "proceed" -> uri.getQueryParameter("u")?.let { u -> AdBlocker.tempAllow(hostOf(u)); tab.web.loadUrl(u) }
             "legacy" -> uri.getQueryParameter("u")?.let { u -> openLegacy(tab, u) }
+            "gxrefresh" -> { GxCorner.ensure(this, true); toast("جاري تحديث ركن الألعاب...") }
             "clearspy" -> io.execute { db.clearSpyLog(); h.post { reloadIfAlive(tab) } }
         }
     }
@@ -1738,6 +1865,7 @@ class MainActivity : Activity() {
         hdr.addView(master)
         box.addView(hdr, LinearLayout.LayoutParams(MATCH, WRAP).apply { setMargins(dp(10), dp(2), dp(10), dp(6)) })
 
+        box.addView(row("home", "الصفحة الرئيسية") { cur?.web?.loadUrl(Pages.HOME_URL) })
         box.addView(row("plus", "علامة تبويب جديدة") { newTab(Pages.HOME_URL) })
         box.addView(row("incognito", "علامة تبويب خاصة") { newTab(Pages.HOME_URL, priv = true) })
         box.addView(divider())
@@ -1778,6 +1906,7 @@ class MainActivity : Activity() {
             row("camera", "لقطة كاملة للصفحة") { screenshot(true) },
             row("storage", "حفظ للقراءة بدون إنترنت") { saveOffline(cur) },
             row("t:▶", "فيديوهات الصفحة") { showVideos() },
+            row("t:⧉", "نافذة فيديو عائمة (PiP)") { popOutVideo() },
             row("full", if (fullscreen) "إنهاء ملء الشاشة" else "ملء الشاشة") { setFullscreen(!fullscreen) },
             row("game", if (gameMode) "إنهاء وضع اللعب" else "وضع اللعب") { setGameMode(!gameMode, false) },
             row("moon", "تعتيم المواقع") { toggleDark() },
@@ -1952,11 +2081,188 @@ class MainActivity : Activity() {
         shieldPopup = pop
     }
 
+    // ═════════════════ GX: التحكم في الذاكرة وتنويم التبويبات ═════════════════
+
+    private fun ramInfo(): Triple<Long, Long, Int> {
+        val am = getSystemService(ACTIVITY_SERVICE) as ActivityManager
+        val mi = ActivityManager.MemoryInfo(); am.getMemoryInfo(mi)
+        val total = mi.totalMem / 1048576; val avail = mi.availMem / 1048576
+        return Triple(total, avail, if (total > 0) (avail * 100 / total).toInt() else 100)
+    }
+
+    private fun sleepTab(t: Tab) {
+        if (t === cur || t.popup || t.sleeping || !t.url.startsWith("http")) return
+        t.pending = t.url
+        t.sleeping = true
+        t.web.loadUrl("about:blank")
+    }
+
+    private fun sleepAll(): Int {
+        var n = 0
+        for (t in tabs.toList()) if (t !== cur && !t.sleeping && !t.popup && t.url.startsWith("http")) { sleepTab(t); n++ }
+        return n
+    }
+
+    private fun sleepCheck() {
+        val mins = Cfg.int(Cfg.TABSLEEP, 10)
+        val now = System.currentTimeMillis()
+        val low = Cfg.bool(Cfg.RAMLIM, false) && ramInfo().third < 15
+        for (t in tabs.toList()) {
+            if (t === cur || t.sleeping || t.popup || !t.url.startsWith("http")) continue
+            if (low || (mins > 0 && now - t.lastActive > mins * 60_000L)) sleepTab(t)
+        }
+    }
+
+    private fun showGxControl() {
+        dismissMenu(); dismissShield()
+        val pw = popupWidth(350)
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_RTL; setPadding(dp(14), dp(12), dp(14), dp(12)) }
+        fun gap(h: Int) = View(this).apply { layoutParams = LinearLayout.LayoutParams(MATCH, dp(h)) }
+
+        box.addView(TextView(this).apply {
+            text = "GX CONTROL"; textSize = 17f; setTextColor(theme.accent); typeface = Typeface.DEFAULT_BOLD; letterSpacing = 0.18f
+            setShadowLayer(12f, 0f, 0f, theme.accent)
+        })
+        box.addView(gap(8))
+
+        // الذاكرة
+        val (total, avail, free) = ramInfo()
+        val used = total - avail
+        val ramCard = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(10), dp(12), dp(10)); background = Ui.round(theme.surface2, dp(14).toFloat()) }
+        ramCard.addView(TextView(this).apply { text = "ذاكرة الجهاز (RAM)"; textSize = 12f; setTextColor(theme.sub) })
+        ramCard.addView(TextView(this).apply { text = "$used / $total MB مستخدمة • متاح $free%"; textSize = 14f; setTextColor(theme.text); setPadding(0, dp(2), 0, dp(6)) })
+        val pb = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 100; progress = if (total > 0) (used * 100 / total).toInt() else 0
+            progressTintList = android.content.res.ColorStateList.valueOf(if (free < 15) Color.rgb(235, 80, 80) else theme.accent)
+            progressBackgroundTintList = android.content.res.ColorStateList.valueOf(theme.bg)
+        }
+        ramCard.addView(pb, LinearLayout.LayoutParams(MATCH, dp(6)))
+        box.addView(ramCard)
+        box.addView(gap(8))
+
+        fun swRow(title: String, sub: String?, initial: Boolean, onChange: (Boolean) -> Unit): View {
+            var st = initial
+            val sw = ui.switchView(st)
+            val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(4), dp(8), dp(4), dp(8)) }
+            val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            c.addView(TextView(this).apply { text = title; textSize = 14f; setTextColor(theme.text) })
+            if (sub != null) c.addView(TextView(this).apply { text = sub; textSize = 11f; setTextColor(theme.sub) })
+            r.addView(c, LinearLayout.LayoutParams(0, WRAP, 1f)); r.addView(sw)
+            r.setOnClickListener { st = !st; ui.applySwitch(sw, st); onChange(st) }
+            return r
+        }
+        box.addView(swRow("محدِّد الذاكرة (RAM Limiter)", "ينوّم التبويبات الخلفية لما المتاح يقل عن 15%", Cfg.bool(Cfg.RAMLIM, false)) { Cfg.setBool(Cfg.RAMLIM, it) })
+        val sleepLabel = { m: Int -> if (m == 0) "متوقف" else "$m دقيقة" }
+        val sleepRow = TextView(this).apply { textSize = 13f; setTextColor(theme.text); setPadding(dp(4), dp(10), dp(4), dp(10)); text = "تنويم التبويبات الخاملة بعد: " + sleepLabel(Cfg.int(Cfg.TABSLEEP, 10)) + "  ‹" }
+        sleepRow.setOnClickListener {
+            val next = when (Cfg.int(Cfg.TABSLEEP, 10)) { 0 -> 5; 5 -> 10; 10 -> 30; 30 -> 60; else -> 0 }
+            Cfg.setInt(Cfg.TABSLEEP, next); sleepRow.text = "تنويم التبويبات الخاملة بعد: " + sleepLabel(next) + "  ‹"
+        }
+        box.addView(sleepRow)
+
+        // قاتل التبويبات
+        box.addView(TextView(this).apply { text = "HOT TABS (" + tabs.size + ")"; textSize = 11f; setTextColor(theme.sub); letterSpacing = 0.12f; setPadding(dp(2), dp(8), 0, dp(4)) })
+        for (t in tabs.toList().take(8)) {
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(4), dp(6), dp(4), dp(6)) }
+            val nm = when { isInternal(t.url) && t.pending == null -> "الرئيسية"; t.title.isNotBlank() -> t.title; else -> t.host.ifEmpty { t.pending ?: "تبويب" } }
+            row.addView(TextView(this).apply {
+                text = (if (t === cur) "● " else if (t.sleeping) "💤 " else "○ ") + nm; textSize = 12f; setTextColor(if (t === cur) theme.accent2 else theme.text)
+                maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+            }, LinearLayout.LayoutParams(0, WRAP, 1f))
+            if (t !== cur && !t.sleeping && t.url.startsWith("http")) {
+                row.addView(ui.button("نوّم", false) { sleepTab(t); showGxControl() }.apply { textSize = 11f; setPadding(dp(12), dp(5), dp(12), dp(5)) })
+            }
+            box.addView(row)
+        }
+        box.addView(ui.space(6))
+        box.addView(ui.button("💤 نوّم كل التبويبات الخلفية", false) { val n = sleepAll(); dismissMenu(); toast("تم تنويم $n تبويب") })
+        box.addView(gap(10))
+
+        // اختصارات سريعة
+        fun chip(icon: String, label: String, on: Boolean, action: () -> Unit): View {
+            val c = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(dp(2), dp(8), dp(2), dp(8))
+                background = Ui.round(if (on) theme.accent else theme.surface2, dp(12).toFloat())
+                setOnClickListener { Fx.tap(it); dismissMenu(); action() }
+            }
+            c.addView(menuIcon(icon, if (on) Color.WHITE else theme.sub, 20), LinearLayout.LayoutParams(dp(20), dp(20)))
+            c.addView(TextView(this).apply { text = label; textSize = 10f; setTextColor(if (on) Color.WHITE else theme.sub); gravity = Gravity.CENTER; setPadding(0, dp(3), 0, 0) })
+            return c
+        }
+        val chips = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutDirection = View.LAYOUT_DIRECTION_RTL }
+        val cl = { LinearLayout.LayoutParams(0, WRAP, 1f).apply { setMargins(dp(3), 0, dp(3), 0) } }
+        chips.addView(chip("game", "اللعب", gameMode) { setGameMode(!gameMode, false) }, cl())
+        chips.addView(chip("bolt", "FPS/Ping", Cfg.bool(Cfg.FPS, true)) { Cfg.setBool(Cfg.FPS, !Cfg.bool(Cfg.FPS, true)); updateHud() }, cl())
+        chips.addView(chip("desktop", "كمبيوتر", cur?.desktop == true) { setDesktop(cur?.desktop != true) }, cl())
+        chips.addView(chip("full", "ملء الشاشة", fullscreen) { setFullscreen(!fullscreen) }, cl())
+        chips.addView(chip("shield_check", "الدرع", AdBlocker.enabled()) { Cfg.setBool(Cfg.SHIELD, !Cfg.bool(Cfg.SHIELD, true)); cur?.web?.reload() }, cl())
+        box.addView(chips)
+        box.addView(gap(10))
+
+        val cleaner = ui.button("🧹 GX Cleaner — تنظيف الكاش", false) { dismissMenu(); cleanCacheNow(cur) }
+        box.addView(cleaner)
+        computeStorageAsync { s -> cleaner.text = "🧹 GX Cleaner — تنظيف الكاش (" + Storage.fmt(s.cache) + ")" }
+        box.addView(TextView(this).apply { text = "ملاحظة: محدِّد CPU والشبكة غير ممكنين داخل متصفح أندرويد."; textSize = 10f; setTextColor(theme.sub); setPadding(dp(2), dp(8), 0, 0) })
+
+        val maxH = (resources.displayMetrics.heightPixels * 0.82f).toInt() - (if (bottomBar.visibility == View.VISIBLE) bottomBar.height else 0)
+        box.measure(View.MeasureSpec.makeMeasureSpec(pw, View.MeasureSpec.EXACTLY), View.MeasureSpec.UNSPECIFIED)
+        val ph = minOf(box.measuredHeight, maxH)
+        val sv = ScrollView(this).apply {
+            isVerticalScrollBarEnabled = false; overScrollMode = View.OVER_SCROLL_NEVER
+            background = Ui.round(theme.surface, dp(22).toFloat(), theme.accent.withAlpha(120), dp(1))
+            addView(box, ViewGroup.LayoutParams(MATCH, WRAP))
+        }
+        val pop = PopupWindow(sv, pw, ph, true)
+        pop.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        pop.elevation = dp(14).toFloat()
+        pop.isOutsideTouchable = true
+        pop.setOnDismissListener { if (menuPopup === pop) menuPopup = null }
+        pop.showAtLocation(root, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, if (bottomBar.visibility == View.VISIBLE) bottomBar.height + dp(8) else dp(24))
+        menuPopup = pop
+    }
+
+    // ═════════════════ نافذة الفيديو العائمة (PiP) ═════════════════
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        enterPipIfVideo()
+    }
+
+    private fun enterPipIfVideo(): Boolean {
+        if (customView == null || Build.VERSION.SDK_INT < 26) return false
+        return try { enterPictureInPictureMode(android.app.PictureInPictureParams.Builder().build()); true } catch (_: Throwable) { false }
+    }
+
+    private fun popOutVideo() {
+        if (!enterPipIfVideo()) toast("شغّل الفيديو بملء الشاشة الأول، وبعدها ارجع للرئيسية وهيتحول لنافذة عائمة")
+    }
+
+    // ═════════════════ خلفية الصفحة الرئيسية (صورة من المعرض) ═════════════════
+
+    internal fun pickWallpaper() {
+        try { startActivityForResult(Intent(Intent.ACTION_GET_CONTENT).setType("image/*"), REQ_WALL) } catch (_: Exception) { toast("لا يوجد تطبيق معرض صور") }
+    }
+
+    private fun saveWallpaper(u: Uri) {
+        try {
+            val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            contentResolver.openInputStream(u)?.use { BitmapFactory.decodeStream(it, null, o) }
+            var sample = 1
+            while (o.outWidth / sample > 1400 || o.outHeight / sample > 1400) sample *= 2
+            val o2 = BitmapFactory.Options().apply { inSampleSize = sample }
+            val bmp = contentResolver.openInputStream(u)?.use { BitmapFactory.decodeStream(it, null, o2) }
+            if (bmp == null) { h.post { toast("تعذر قراءة الصورة") }; return }
+            File(filesDir, "wall.jpg").outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 72, it) }
+            Cfg.setStr(Cfg.WALL, "custom")
+            h.post { toast("✅ تم تعيين الخلفية"); val t = cur; if (t != null && isInternal(t.url)) t.web.reload() }
+        } catch (_: Exception) { h.post { toast("تعذر حفظ الصورة") } }
+    }
+
     // ═════════════════ الإعدادات (صفحة كاملة) ═════════════════
 
     private fun openSettings(page: String = "main") {
         dismissMenu(); dismissShield()
-        if (page == "appearance") { openSettingsNow(page); return }
+        if (page == "appearance" || page == "gxmods") { openSettingsNow(page); return }
         pinLock.ask { openSettingsNow(page) }
     }
 
@@ -1976,6 +2282,7 @@ class MainActivity : Activity() {
 
     // دوال تستخدمها صفحة الإعدادات
     internal fun engineLabel() = engineName()
+    internal fun reloadHomeIfShown() { val t = cur; if (t != null && isInternal(t.url)) t.web.reload() }
     internal fun toastMsg(m: String) = toast(m)
     internal fun currentTab(): Tab? = cur
     internal fun reloadCurrent() { cur?.web?.reload() }
@@ -2038,8 +2345,6 @@ class MainActivity : Activity() {
             })
         }
     }
-
-    private val backupKeys = listOf(Cfg.THEME, Cfg.ENGINE, Cfg.ADS, Cfg.TRK, Cfg.MAL, Cfg.SOC, Cfg.ANNOY, Cfg.SPY, Cfg.HTTPS_ONLY, Cfg.MIXED, Cfg.FP, Cfg.SAFEB, Cfg.DLWARN, Cfg.DARK, Cfg.GESTURES, Cfg.FPS, Cfg.CACHE_MB)
 
     /** نسخة احتياطية في ملف (بيطلب الـ PIN لو القفل شغّال) */
     internal fun exportBackup() = gate {
@@ -2107,7 +2412,7 @@ class MainActivity : Activity() {
             isInternal(t.url) && t.pending == null -> if (t.priv) "علامة تبويب خاصة" else "علامة تبويب جديدة"
             t.title.isNotBlank() -> t.title
             else -> t.host.ifEmpty { t.pending ?: "علامة تبويب" }
-        }
+        }.let { if (t.sleeping) "💤 " + it else it }.let { if (t.pinned) "📌 " + it else it }
         fun countOf(p: Boolean) = tabs.count { it.priv == p }
         fun icon(name: String, color: Int, size: Int, label: String = "") = IconDrawable(name, color, dp(size), label)
         fun iconView(name: String, color: Int, size: Int) = ImageView(this).apply { setImageDrawable(icon(name, color, size)) }
@@ -2146,6 +2451,51 @@ class MainActivity : Activity() {
             })
         }
 
+        fun gesture(dir: String): String = Cfg.str("tg_$dir", when (dir) { "left" -> "close"; "right" -> "pin"; "up" -> "closeclear"; else -> "suspend" })
+
+        fun runTabAction(t: Tab, act: String) {
+            when (act) {
+                "close", "closeclear" -> {
+                    if (t.pinned) { showSnack("📌 التاب مثبّت — فك التثبيت الأول", null); renderList() }
+                    else { val host = t.host; closeMany(listOf(t)); if (act == "closeclear") clearSiteData(host) }
+                }
+                "pin" -> { t.pinned = !t.pinned; showSnack(if (t.pinned) "📌 اتثبّت" else "اتفك التثبيت", null); renderList() }
+                "suspend" -> { if (t === cur) showSnack("مينفعش تجمّد التاب الحالي", null) else sleepTab(t); renderList() }
+                "gamemode" -> { d.dismiss(); setGameMode(!gameMode, false) }
+                else -> renderList()
+            }
+        }
+
+        /** سحب الكارت: شمال/يمين على الكارت كله، فوق/تحت من شريط العنوان (عشان ما يتعارضش مع سكرول القايمة) */
+        fun attachSwipe(trigger: View, card: View, t: Tab, vertical: Boolean) {
+            val slop = android.view.ViewConfiguration.get(this).scaledTouchSlop
+            var sx = 0f; var sy = 0f; var mode = 0
+            trigger.setOnTouchListener { v, ev ->
+                when (ev.actionMasked) {
+                    android.view.MotionEvent.ACTION_DOWN -> { sx = ev.rawX; sy = ev.rawY; mode = 0; if (vertical) v.parent?.requestDisallowInterceptTouchEvent(true); true }
+                    android.view.MotionEvent.ACTION_MOVE -> {
+                        val dx = ev.rawX - sx; val dy = ev.rawY - sy
+                        if (mode == 0 && maxOf(Math.abs(dx), Math.abs(dy)) > slop) mode = if (Math.abs(dx) > Math.abs(dy)) 1 else if (vertical) 2 else 3
+                        if (mode == 1) { v.parent?.requestDisallowInterceptTouchEvent(true); card.translationX = dx; card.alpha = 1f - minOf(0.6f, Math.abs(dx) / card.width) }
+                        else if (mode == 2) { card.translationY = dy; card.alpha = 1f - minOf(0.6f, Math.abs(dy) / (card.height.toFloat() + 1f)) }
+                        true
+                    }
+                    android.view.MotionEvent.ACTION_UP -> {
+                        val dx = ev.rawX - sx; val dy = ev.rawY - sy
+                        var act: String? = null
+                        if (mode == 1 && Math.abs(dx) > card.width * 0.4f) act = gesture(if (dx < 0) "left" else "right")
+                        else if (mode == 2 && Math.abs(dy) > card.height * 0.4f) act = gesture(if (dy < 0) "up" else "down")
+                        card.animate().translationX(0f).translationY(0f).alpha(1f).setDuration(150).start()
+                        if (mode == 0) card.performClick()
+                        else if (act != null && act != "none") { v.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS); runTabAction(t, act) }
+                        true
+                    }
+                    android.view.MotionEvent.ACTION_CANCEL -> { card.animate().translationX(0f).translationY(0f).alpha(1f).setDuration(150).start(); true }
+                    else -> true
+                }
+            }
+        }
+
         fun menuRow(ic: String, label: String, color: Int = txtC(), onClick: () -> Unit): View {
             val r = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
@@ -2169,7 +2519,7 @@ class MainActivity : Activity() {
             fun add(v: View) = card.addView(v, LinearLayout.LayoutParams(MATCH, rowH))
             add(menuRow("plus", "علامة تبويب جديدة") { d.dismiss(); newTab(Pages.HOME_URL) })
             add(menuRow("incognito", "علامة تبويب خاصة جديدة") { d.dismiss(); newTab(Pages.HOME_URL, priv = true) })
-            add(menuRow("close", "إغلاق جميع علامات التبويب") { closeMany(tabs.filter { it.priv == priv }) })
+            add(menuRow("close", "إغلاق جميع علامات التبويب") { closeMany(tabs.filter { it.priv == priv && !it.pinned }) })
             add(menuRow("check", "اختيار علامات التبويب") { selecting = true; selected.clear(); renderAll() })
             add(menuRow("trash", "حذف بيانات التصفح") { d.dismiss(); confirmClear() })
             add(menuRow("settings", "الإعدادات") { d.dismiss(); showSettings() })
@@ -2328,6 +2678,8 @@ class MainActivity : Activity() {
                         }, FrameLayout.LayoutParams(dp(26), dp(26), Gravity.TOP or Gravity.LEFT).apply { setMargins(dp(8), dp(8), 0, 0) })
                     }
                     card.addView(frame, LinearLayout.LayoutParams(MATCH, imgH))
+                    attachSwipe(card, card, t, false)
+                    attachSwipe(bar, card, t, true)
                     cards.add(card)
                 }
                 var i = 0
@@ -2695,9 +3047,10 @@ class MainActivity : Activity() {
         private const val REQ_STORAGE = 4102
         private const val REQ_VOICE = 4104
         private const val REQ_LOCK = 4105
-        private const val REQ_PINRESET = 4106
-        private const val REQ_BK_EXPORT = 4107
-        private const val REQ_BK_IMPORT = 4108
+        private const val REQ_WALL = 4106
+        private const val REQ_PINRESET = 4120
+        private const val REQ_BK_EXPORT = 4121
+        private const val REQ_BK_IMPORT = 4122
         private val GAME_HOSTS = listOf("conqueronline.com", "playconqueronline.com")
         private const val DESKTOP_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         private val PAL = intArrayOf(
