@@ -56,6 +56,9 @@ object Themes {
 }
 
 fun Int.hex(): String = String.format("#%06X", 0xFFFFFF and this)
+
+/** لون بصيغة CSS rgba(r,g,b,alpha) — alpha بيتكتب كنص زي ".22" */
+fun rgbaStr(c: Int, alpha: String): String = "rgba(" + ((c shr 16) and 255) + "," + ((c shr 8) and 255) + "," + (c and 255) + "," + alpha + ")"
 fun Int.withAlpha(a: Int): Int = Color.argb(a, Color.red(this), Color.green(this), Color.blue(this))
 fun Int.darker(f: Float = 0.6f): Int = Color.rgb((Color.red(this) * f).toInt(), (Color.green(this) * f).toInt(), (Color.blue(this) * f).toInt())
 
