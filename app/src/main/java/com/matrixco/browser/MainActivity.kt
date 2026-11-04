@@ -212,6 +212,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Cfg.init(this)
+        NetGuard.apply()
         val crashFile = File(filesDir, "crash.txt")
         if (crashFile.exists()) { showCrashReport(crashFile); return }
         db = ShieldDatabase.getInstance(this)
@@ -787,7 +788,7 @@ class MainActivity : Activity() {
         val target = smartUrl(tab, resolve(input))
         IronGuard.scoreUrl(this, target, 0)?.let { showRiskBlocked(tab, hostOf(target), target, it); return }
         AdultGuard.checkUrl(target)?.let { showBlocked(tab, hostOf(target), it); return }
-        tab.web.loadUrl(target)
+        tab.web.loadUrl(target, mapOf("Sec-GPC" to "1", "DNT" to "1"))
     }
 
     private fun toggleBookmark(tab: Tab) {
@@ -872,6 +873,12 @@ class MainActivity : Activity() {
         w.setBackgroundColor(theme.bg)
         w.overScrollMode = View.OVER_SCROLL_NEVER
         w.addJavascriptInterface(ShieldBridge(tab), "__mxb")
+        if (Cfg.bool(Cfg.FP, true)) {
+            try {
+                if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT))
+                    androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, Scripts.HARDEN, setOf("*"))
+            } catch (_: Throwable) {}
+        }
         w.webViewClient = makeClient(tab)
         w.webChromeClient = makeChrome(tab)
         w.setDownloadListener { url, ua, cd, mime, _ -> startDownload(url, ua, cd, mime) }
@@ -1017,6 +1024,7 @@ class MainActivity : Activity() {
         tab.web.evaluateJavascript(
             Scripts.main(host, tab.skipMode, Cfg.bool(Cfg.DARK, false), yt, on && AdBlocker.adsOn(), on && AdBlocker.annoyOn(), spy, Cfg.bool(Cfg.FP, true), Cfg.bool(Cfg.BGAUDIO, false), pol), null
         )
+        if (Cfg.bool(Cfg.FP, true)) tab.web.evaluateJavascript(Scripts.HARDEN, null)
         if (tab.desktop) tab.web.evaluateJavascript(Scripts.desktopViewport(desktopWidth()), null)
         if (on) {
             io.execute {
@@ -1817,7 +1825,131 @@ class MainActivity : Activity() {
 
     private fun popupWidth(max: Int) = minOf(dp(max), resources.displayMetrics.widthPixels - dp(16))
 
-    private fun showMenu() {
+    private fun showMenu() = showOperaMenu()
+
+    /** قايمة بأسلوب Opera: بطاقة الحالة، مفاتيح سريعة، اختصارات، بانر الشبكة */
+    private fun showOperaMenu() {
+        dismissMenu(); dismissShield()
+        val d = Dialog(this)
+        d.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+        val bg = Color.rgb(17, 18, 26); val card = Color.rgb(30, 31, 44); val card2 = Color.rgb(42, 43, 60)
+        val txt = Color.WHITE; val sub = Color.rgb(160, 162, 184); val teal = Color.rgb(120, 225, 200)
+        val sheet = android.graphics.drawable.GradientDrawable().apply { setColor(bg); val r = dp(26).toFloat(); cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f) }
+        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_RTL; setPadding(dp(14), dp(14), dp(14), dp(18)) }
+        val sv = ScrollView(this).apply { isVerticalScrollBarEnabled = false; background = sheet; addView(col, ViewGroup.LayoutParams(MATCH, WRAP)) }
+
+        fun ic(name: String, color: Int, size: Int) = ImageView(this).apply { setImageDrawable(IconDrawable(name, color, dp(size))) }
+        fun lp(w: Int, h: Int, top: Int = 0) = LinearLayout.LayoutParams(w, h).apply { topMargin = top }
+
+        // بطاقة الحالة
+        val head = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(14), dp(12), dp(14), dp(12))
+            background = Ui.round(card, dp(22).toFloat())
+        }
+        val av = FrameLayout(this).apply {
+            background = android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TL_BR, intArrayOf(Color.rgb(90, 120, 255), Color.rgb(235, 92, 200))).apply { shape = android.graphics.drawable.GradientDrawable.OVAL }
+            addView(ic("shield_check", Color.WHITE, 26), FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER))
+        }
+        head.addView(av, LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginEnd = dp(12) })
+        val ht = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        ht.addView(TextView(this).apply { text = "MaTrIX Co"; textSize = 16f; setTextColor(txt); typeface = Typeface.DEFAULT_BOLD })
+        ht.addView(TextView(this).apply { text = "الجدار الحديدي: " + (if (IronGuard.enabled()) "شغّال" else "مقفول") + " • " + appVersion(); textSize = 12f; setTextColor(sub) })
+        head.addView(ht, LinearLayout.LayoutParams(0, WRAP, 1f))
+        head.addView(FrameLayout(this).apply {
+            addView(ic("settings", sub, 24), FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
+            setOnClickListener { d.dismiss(); openSettings("main") }
+        }, LinearLayout.LayoutParams(dp(44), dp(44)))
+        col.addView(head)
+
+        // مفاتيح سريعة
+        val quick = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutDirection = View.LAYOUT_DIRECTION_RTL }
+        col.addView(quick, lp(MATCH, WRAP, dp(14)))
+        lateinit var refreshQuick: () -> Unit
+        fun qBtn(icon: String, label: String, state: String, on: Boolean, click: () -> Unit) {
+            val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; setOnClickListener { click() } }
+            val circle = FrameLayout(this).apply { background = Ui.round(if (on) teal else card2, dp(28).toFloat()) }
+            circle.addView(ic(icon, if (on) Color.rgb(10, 40, 34) else txt, 24), FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
+            c.addView(circle, LinearLayout.LayoutParams(dp(60), dp(56)))
+            c.addView(TextView(this).apply { text = label; textSize = 11f; setTextColor(txt); gravity = Gravity.CENTER; setPadding(0, dp(6), 0, 0) })
+            c.addView(TextView(this).apply { text = state; textSize = 10f; setTextColor(sub); gravity = Gravity.CENTER })
+            quick.addView(c, LinearLayout.LayoutParams(0, WRAP, 1f))
+        }
+        refreshQuick = {
+            quick.removeAllViews()
+            val vpn = NetGuard.vpnActive(this) || NetGuard.rule() != null
+            qBtn("globe", "VPN", if (vpn) "شغّال" else "إيقاف", vpn) { d.dismiss(); openSettings("network") }
+            val ds = Cfg.bool(Cfg.DATASAVER, false)
+            qBtn("bolt", "موفر البيانات", if (ds) "شغّال" else "إيقاف", ds) { Cfg.setBool(Cfg.DATASAVER, !ds); toast(if (!ds) "موفر البيانات شغّال (الصور مقفولة)" else "موفر البيانات مقفول"); cur?.web?.reload(); refreshQuick() }
+            val sh = Cfg.bool(Cfg.SHIELD, true)
+            qBtn("shield", "حاجب الإعلانات", if (sh) "شغّال" else "إيقاف", sh) { gate { Cfg.setBool(Cfg.SHIELD, !sh); cur?.web?.reload(); refreshQuick() } }
+            val dk = Cfg.bool(Cfg.DARK, false)
+            qBtn("moon", "الوضع الليلي", if (dk) "شغّال" else "إيقاف", dk) { toggleDark(); refreshQuick() }
+        }
+        refreshQuick()
+
+        // اختصارات
+        fun tile(icon: String, label: String, click: () -> Unit): View = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(14), 0, dp(14), 0)
+            background = Ui.round(card, dp(18).toFloat())
+            addView(TextView(this@MainActivity).apply { text = label; textSize = 13f; setTextColor(txt) }, LinearLayout.LayoutParams(0, WRAP, 1f))
+            addView(ic(icon, sub, 22), LinearLayout.LayoutParams(dp(22), dp(22)))
+            setOnClickListener { d.dismiss(); click() }
+        }
+        fun tileRow(a: View, b: View?) {
+            val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutDirection = View.LAYOUT_DIRECTION_RTL }
+            r.addView(a, LinearLayout.LayoutParams(0, dp(54), 1f).apply { marginEnd = dp(5) })
+            r.addView(b ?: View(this), LinearLayout.LayoutParams(0, dp(54), 1f).apply { marginStart = dp(5) })
+            col.addView(r, lp(MATCH, WRAP, dp(10)))
+        }
+        tileRow(tile("bookmark", "المفضلات") { openInternal("/bookmarks") }, tile("download", "التنزيلات") { openDownloadsManager() })
+        tileRow(tile("history", "المحفوظات") { openInternal("/history") }, tile("book", "صفحات غير متصلة") { openInternal("/offline") })
+        tileRow(tile("game", "وضع الألعاب") { setGameMode(!gameMode, false) }, tile("incognito", "تبويب خاص") { newTab(Pages.HOME_URL, priv = true) })
+
+        // بانر الشبكة والـ VPN
+        val banner = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(18), 0, dp(18), 0)
+            background = android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.RIGHT_LEFT,
+                intArrayOf(Color.rgb(74, 108, 247), Color.rgb(138, 92, 240), Color.rgb(224, 92, 200))).apply { cornerRadius = dp(22).toFloat() }
+            setOnClickListener { d.dismiss(); openSettings("network") }
+        }
+        val bt = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        bt.addView(TextView(this).apply { text = "الشبكة والـ VPN المجاني"; textSize = 15f; setTextColor(Color.WHITE); typeface = Typeface.DEFAULT_BOLD })
+        bt.addView(TextView(this).apply { text = "Tor • بروكسي • DNS مشفّر • بدائل VPN موثوقة"; textSize = 11f; setTextColor(Color.argb(220, 255, 255, 255)) })
+        banner.addView(bt, LinearLayout.LayoutParams(0, WRAP, 1f))
+        banner.addView(FrameLayout(this).apply {
+            background = Ui.round(Color.argb(200, 20, 20, 30), dp(14).toFloat())
+            addView(ic("globe", Color.WHITE, 24), FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
+        }, LinearLayout.LayoutParams(dp(46), dp(46)))
+        col.addView(banner, lp(MATCH, dp(72), dp(14)))
+
+        // قايمة
+        fun row(icon: String, title: String, subT: String, click: () -> Unit) {
+            val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(6), dp(12), dp(6), dp(12)); setOnClickListener { d.dismiss(); click() } }
+            val t = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            t.addView(TextView(this).apply { text = title; textSize = 15f; setTextColor(txt) })
+            t.addView(TextView(this).apply { text = subT; textSize = 12f; setTextColor(sub) })
+            r.addView(t, LinearLayout.LayoutParams(0, WRAP, 1f))
+            r.addView(FrameLayout(this).apply { background = Ui.round(card, dp(14).toFloat()); addView(ic(icon, sub, 22), FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER)) }, LinearLayout.LayoutParams(dp(46), dp(46)))
+            col.addView(r, lp(MATCH, WRAP, dp(4)))
+        }
+        col.addView(View(this).apply { setBackgroundColor(card) }, lp(MATCH, dp(1), dp(14)))
+        row("palette", "المظهر", "الثيمات والخلفيات والألوان") { openSettings("appearance") }
+        row("shield_check", "الجدار الحديدي", "مستوى الحساسية وسجل المنع والقائمة البيضاء") { openSettings("iron") }
+        row("storage", "نسخ احتياطي واستعادة", "ملف فيه إعداداتك ومفضلتك وفلاترك") { exportBackup() }
+        row("code", "أدوات الصفحة", "نسخة الكمبيوتر، البحث، القراءة، الترجمة، اللقطات...") { showMenuLegacy() }
+        row("settings", "الإعدادات", "كل الإعدادات") { openSettings("main") }
+
+        d.setContentView(sv)
+        d.window?.let { w ->
+            w.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            w.setLayout(MATCH, (resources.displayMetrics.heightPixels * 0.9f).toInt())
+            w.setGravity(Gravity.BOTTOM)
+            w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND); w.setDimAmount(0.55f)
+        }
+        d.show()
+    }
+
+    private fun showMenuLegacy() {
         dismissMenu(); dismissShield()
         val t = cur
         val pw = popupWidth(320)
@@ -2373,11 +2505,11 @@ class MainActivity : Activity() {
         var menuOpen = false
 
         val pBg = Color.rgb(20, 11, 36); val pCard = Color.rgb(42, 26, 70); val pAcc = Color.rgb(184, 140, 255)
-        fun bgC() = if (priv) pBg else theme.bg
-        fun cardC() = if (priv) pCard else theme.surface2
-        fun accC() = if (priv) pAcc else theme.accent
-        fun txtC() = if (priv) Color.WHITE else theme.text
-        fun subC() = if (priv) Color.rgb(176, 160, 205) else theme.sub
+        fun bgC() = if (priv) pBg else Color.rgb(27, 22, 70)
+        fun cardC() = if (priv) pCard else Color.rgb(60, 52, 128)
+        fun accC() = if (priv) pAcc else Color.rgb(184, 172, 255)
+        fun txtC() = Color.WHITE
+        fun subC() = if (priv) Color.rgb(176, 160, 205) else Color.rgb(190, 184, 235)
 
         val rootV = FrameLayout(this).apply { layoutDirection = View.LAYOUT_DIRECTION_RTL }
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -2512,7 +2644,7 @@ class MainActivity : Activity() {
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_RTL
                 setPadding(0, dp(8), 0, dp(8))
-                background = Ui.round(if (priv) Color.rgb(34, 20, 58) else theme.surface, dp(18).toFloat(), subC().withAlpha(50), dp(1))
+                background = Ui.round(if (priv) Color.rgb(34, 20, 58) else Color.rgb(44, 38, 100), dp(18).toFloat(), subC().withAlpha(50), dp(1))
                 elevation = dp(8).toFloat()
             }
             val rowH = dp(52)
@@ -2545,7 +2677,7 @@ class MainActivity : Activity() {
             val seg = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL; layoutDirection = View.LAYOUT_DIRECTION_LTR
                 setPadding(dp(5), dp(5), dp(5), dp(5))
-                background = Ui.round(if (priv) Color.rgb(32, 19, 54) else theme.surface, dp(28).toFloat())
+                background = Ui.round(if (priv) Color.rgb(32, 19, 54) else Color.rgb(44, 38, 100), dp(28).toFloat())
             }
             fun segBtn(isPriv: Boolean) {
                 val on = priv == isPriv
@@ -2583,15 +2715,26 @@ class MainActivity : Activity() {
                 bottomSlot.addView(btn, FrameLayout.LayoutParams(dp(200), dp(54), Gravity.CENTER))
                 return
             }
+            val pill = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; layoutDirection = View.LAYOUT_DIRECTION_LTR
+                background = Ui.round(Color.argb(110, 40, 34, 110), dp(34).toFloat()); setPadding(dp(8), dp(6), dp(8), dp(6))
+            }
+            fun pillBtn(icon: String, click: () -> Unit) = FrameLayout(this).apply {
+                addView(iconView(icon, subC(), 24), FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER)); setOnClickListener { click() }
+            }
+            pill.addView(pillBtn("dots") { openMenu() }, LinearLayout.LayoutParams(0, dp(52), 1f))
+            pill.addView(FrameLayout(this).apply {
+                addView(ImageView(this@MainActivity).apply { setImageDrawable(icon("tabs", subC(), 24, countOf(priv).toString())) }, FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
+            }, LinearLayout.LayoutParams(0, dp(52), 1f))
             val plus = FrameLayout(this).apply {
-                background = Ui.round(accC(), dp(20).toFloat())
+                background = Ui.round(accC(), dp(28).toFloat())
                 setOnClickListener { d.dismiss(); newTab(Pages.HOME_URL, priv = priv) }
             }
             plus.addView(iconView("plus", bgC(), 30), FrameLayout.LayoutParams(dp(30), dp(30), Gravity.CENTER))
-            bottomSlot.addView(plus, FrameLayout.LayoutParams(dp(76), dp(56), Gravity.CENTER))
-            val dots = FrameLayout(this).apply { setOnClickListener { openMenu() } }
-            dots.addView(iconView("dots", subC(), 26), FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER))
-            bottomSlot.addView(dots, FrameLayout.LayoutParams(dp(56), dp(56), Gravity.LEFT or Gravity.CENTER_VERTICAL).apply { leftMargin = dp(14) })
+            pill.addView(plus, LinearLayout.LayoutParams(dp(76), dp(56)).apply { setMargins(dp(4), 0, dp(4), 0) })
+            pill.addView(pillBtn("history") { d.dismiss(); openInternal("/history") }, LinearLayout.LayoutParams(0, dp(52), 1f))
+            pill.addView(pillBtn("settings") { d.dismiss(); showMenu() }, LinearLayout.LayoutParams(0, dp(52), 1f))
+            bottomSlot.addView(pill, FrameLayout.LayoutParams(MATCH, dp(66), Gravity.CENTER).apply { setMargins(dp(14), 0, dp(14), 0) })
         }
 
         fun emptyState() {
@@ -2664,7 +2807,7 @@ class MainActivity : Activity() {
                     }, LinearLayout.LayoutParams(dp(40), dp(40)))
                     card.addView(bar, LinearLayout.LayoutParams(MATCH, dp(40)))
                     val frame = FrameLayout(this).apply {
-                        background = Ui.round(if (priv) Color.rgb(28, 16, 48) else theme.bg, dp(14).toFloat())
+                        background = Ui.round(if (priv) Color.rgb(28, 16, 48) else Color.rgb(24, 20, 60), dp(14).toFloat())
                         clipToOutline = true
                     }
                     val th = t.thumb
@@ -2697,10 +2840,10 @@ class MainActivity : Activity() {
         }
 
         renderAll = {
-            rootV.setBackgroundColor(bgC())
+            if (priv) rootV.setBackgroundColor(bgC()) else rootV.background = android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(Color.rgb(27, 22, 70), Color.rgb(58, 46, 140)))
             @Suppress("DEPRECATION") run { d.window?.statusBarColor = bgC(); d.window?.navigationBarColor = bgC() }
             searchV.setTextColor(txtC()); searchV.setHintTextColor(subC())
-            searchV.background = Ui.round(if (priv) Color.rgb(34, 20, 58) else theme.surface, dp(24).toFloat())
+            searchV.background = Ui.round(if (priv) Color.rgb(34, 20, 58) else Color.rgb(44, 38, 100), dp(24).toFloat())
             buildHeader(); buildBottom(); renderList()
         }
 

@@ -11,8 +11,8 @@ defaultConfig {
     applicationId = "com.matrixco.browser"
     minSdk = 23
     targetSdk = 28
-    versionCode = 15
-    versionName = "3.7.1"
+    versionCode = 16
+    versionName = "3.8.0"
 }
 
 signingConfigs {
@@ -48,4 +48,8 @@ kotlinOptions {
     jvmTarget = "17"
 }
 
+}
+
+dependencies {
+    implementation("androidx.webkit:webkit:1.12.1")
 }

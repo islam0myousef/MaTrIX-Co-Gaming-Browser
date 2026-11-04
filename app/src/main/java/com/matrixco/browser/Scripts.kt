@@ -469,6 +469,174 @@ if(mode!==0) startScan(); else { sc=oSI(function(){ if(ANNOY&&++ticks<70) unwall
 })();
 """
 
+    /** حماية البصمة والواجهات الحساسة — بتتحقن في بداية كل صفحة قبل سكريبتات الموقع */
+    val HARDEN = """
+(function(){
+if(window.__mxH) return;
+try{ Object.defineProperty(window,'__mxH',{value:1}); }catch(e){}
+var W=window, N=navigator;
+function def(o,k,v){ try{ Object.defineProperty(o,k,{get:function(){return v;},configurable:true}); }catch(e){} }
+function kill(o,k){ try{ Object.defineProperty(o,k,{value:undefined,configurable:true,writable:true}); }catch(e){ try{ o[k]=undefined; }catch(e2){} } }
+var rnd=function(n){ return (Math.random()*n)|0; };
+
+/* 1) إشارات الخصوصية + توحيد مواصفات الجهاز */
+def(N,'globalPrivacyControl',true);
+def(N,'doNotTrack','1');
+def(N,'hardwareConcurrency',4);
+def(N,'deviceMemory',8);
+try{
+  var S=W.screen;
+  def(S,'width',412); def(S,'height',915); def(S,'availWidth',412); def(S,'availHeight',915);
+  def(S,'colorDepth',24); def(S,'pixelDepth',24);
+}catch(e){}
+
+/* 2) الواجهات الحساسة: بطارية، بلوتوث، USB، Serial، HID، NFC، MIDI، حساسات الحركة */
+['getBattery','bluetooth','usb','serial','hid','getInstalledRelatedApps','wakeLock'].forEach(function(k){ kill(N,k); try{ kill(Navigator.prototype,k); }catch(e){} });
+try{ N.requestMIDIAccess=function(){ return Promise.reject(new DOMException('Permission denied','SecurityError')); }; }catch(e){}
+['NDEFReader','Accelerometer','Gyroscope','Magnetometer','AbsoluteOrientationSensor','RelativeOrientationSensor','LinearAccelerationSensor','GravitySensor','AmbientLightSensor','Bluetooth','USB','Serial','HID'].forEach(function(k){ kill(W,k); });
+try{
+  var oAEL=EventTarget.prototype.addEventListener;
+  EventTarget.prototype.addEventListener=function(t){
+    if(t==='deviceorientation'||t==='deviceorientationabsolute'||t==='devicemotion') return;
+    return oAEL.apply(this,arguments);
+  };
+  ['ondeviceorientation','ondeviceorientationabsolute','ondevicemotion'].forEach(function(k){ try{ Object.defineProperty(W,k,{get:function(){return null;},set:function(){},configurable:true}); }catch(e){} });
+}catch(e){}
+
+/* 3) الصلاحيات: أي حاجة حساسة بترجع denied وبدون ما تتسأل */
+try{
+  var P=N.permissions;
+  if(P&&P.query){
+    var oQ=P.query.bind(P);
+    var DENY={'midi':1,'camera':1,'microphone':1,'geolocation':1,'notifications':1,'clipboard-read':1,'clipboard-write':1,'persistent-storage':1,'background-sync':1,'background-fetch':1,'accelerometer':1,'gyroscope':1,'magnetometer':1,'ambient-light-sensor':1,'bluetooth':1,'nfc':1,'push':1,'screen-wake-lock':1,'display-capture':1,'idle-detection':1,'window-placement':1,'storage-access':1,'local-fonts':1,'payment-handler':1,'speaker-selection':1};
+    P.query=function(d){
+      try{
+        var n=d&&d.name;
+        if(n&&DENY[n]){ return Promise.resolve({name:n,state:'denied',onchange:null,addEventListener:function(){},removeEventListener:function(){},dispatchEvent:function(){return false;}}); }
+      }catch(e){}
+      return oQ(d);
+    };
+  }
+}catch(e){}
+
+/* 4) الكاميرا والمايك: مفيش أجهزة ظاهرة لحد ما يتمنح الإذن */
+try{
+  var MD=N.mediaDevices;
+  if(MD&&MD.enumerateDevices){ MD.enumerateDevices=function(){ return Promise.resolve([]); }; }
+}catch(e){}
+
+/* 5) WebGL: اسم كارت الشاشة والمصنّع قيمة عامة موحدة */
+function patchGL(proto){
+  if(!proto) return;
+  var o=proto.getParameter;
+  proto.getParameter=function(p){
+    if(p===37445) return 'Google Inc. (Generic)';
+    if(p===37446) return 'ANGLE (Generic, Generic GPU, OpenGL ES 3.0)';
+    return o.apply(this,arguments);
+  };
+}
+try{ patchGL(W.WebGLRenderingContext&&WebGLRenderingContext.prototype); }catch(e){}
+try{ patchGL(W.WebGL2RenderingContext&&WebGL2RenderingContext.prototype); }catch(e){}
+
+/* 6) Canvas: تشويش بسيط بيتغيّر مع كل استدعاء */
+function jitter(d,w,h){
+  var c=3+rnd(5), n=w*h;
+  for(var i=0;i<c;i++){ var k=rnd(n)*4; if(k+2<d.length){ d[k]=d[k]^1; d[k+1]=d[k+1]^(rnd(2)); d[k+2]=d[k+2]^(rnd(2)); } }
+}
+try{
+  var CX=CanvasRenderingContext2D.prototype, oGI=CX.getImageData;
+  CX.getImageData=function(x,y,w,h){
+    var r=oGI.apply(this,arguments);
+    try{ if(r&&r.data&&r.width*r.height<=300000) jitter(r.data,r.width,r.height); }catch(e){}
+    return r;
+  };
+  var CP=HTMLCanvasElement.prototype, oTD=CP.toDataURL, oTB=CP.toBlob;
+  var noisy=function(c){
+    try{
+      if(!c.width||!c.height||c.width*c.height>300000) return c;
+      var n=document.createElement('canvas'); n.width=c.width; n.height=c.height;
+      var x=n.getContext('2d'); x.drawImage(c,0,0);
+      var id=oGI.call(x,0,0,n.width,n.height); jitter(id.data,n.width,n.height); x.putImageData(id,0,0);
+      return n;
+    }catch(e){ return c; }
+  };
+  CP.toDataURL=function(){ return oTD.apply(noisy(this),arguments); };
+  CP.toBlob=function(){ return oTB.apply(noisy(this),arguments); };
+}catch(e){}
+
+/* 7) الصوت: تشويش دقيق في بيانات القنوات والتحليل */
+try{
+  var AB=W.AudioBuffer&&AudioBuffer.prototype;
+  if(AB){
+    var seen=new WeakSet(), oCD=AB.getChannelData;
+    AB.getChannelData=function(){
+      var d=oCD.apply(this,arguments);
+      try{
+        if(d.length<=200000 && !seen.has(d)){
+          seen.add(d);
+          for(var i=0;i<d.length;i+=37){ d[i]+=(Math.random()-0.5)*1e-6; }
+        }
+      }catch(e){}
+      return d;
+    };
+    var oCF=AB.copyFromChannel;
+    if(oCF) AB.copyFromChannel=function(dest){
+      var r=oCF.apply(this,arguments);
+      try{ if(dest&&dest.length<=200000){ for(var i=0;i<dest.length;i+=37){ dest[i]+=(Math.random()-0.5)*1e-6; } } }catch(e){}
+      return r;
+    };
+  }
+  var AN=W.AnalyserNode&&AnalyserNode.prototype;
+  if(AN){
+    var oF=AN.getFloatFrequencyData;
+    if(oF) AN.getFloatFrequencyData=function(a){ oF.apply(this,arguments); try{ for(var i=0;i<a.length;i+=7){ a[i]+=(Math.random()-0.5)*1e-4; } }catch(e){} };
+    var oB=AN.getByteFrequencyData;
+    if(oB) AN.getByteFrequencyData=function(a){ oB.apply(this,arguments); try{ for(var i=0;i<a.length;i+=11){ a[i]=Math.max(0,Math.min(255,a[i]+(rnd(3)-1))); } }catch(e){} };
+  }
+}catch(e){}
+
+/* 8) الخطوط: أي خط مش قياسي بيتقاس كأنه مش موجود */
+var STD={'serif':1,'sans-serif':1,'monospace':1,'cursive':1,'fantasy':1,'system-ui':1,'arial':1,'helvetica':1,'times new roman':1,'times':1,'courier new':1,'courier':1,'roboto':1,'noto sans':1};
+function famKey(s){ return String(s).split(',')[0].trim().replace(/['"]/g,'').toLowerCase(); }
+try{
+  var oMT=CanvasRenderingContext2D.prototype.measureText;
+  CanvasRenderingContext2D.prototype.measureText=function(t){
+    try{
+      var f=this.font;
+      var m=/^(.*?\d+(?:\.\d+)?(?:px|pt|em|rem|%)(?:\/\S+)?)\s+(.+)$/.exec(f);
+      if(m && !STD[famKey(m[2])]){
+        var parts=m[2].split(','); var last=parts[parts.length-1].trim().replace(/['"]/g,'').toLowerCase();
+        this.font=m[1]+' '+(STD[last]?last:'sans-serif');
+        var r=oMT.call(this,t); this.font=f; return r;
+      }
+    }catch(e){}
+    return oMT.call(this,t);
+  };
+}catch(e){}
+try{
+  var hide=function(el){
+    var s=el&&el.style; if(!s||!s.fontFamily) return null;
+    if(STD[famKey(s.fontFamily)]) return null;
+    var l=parseFloat(s.left), tp=parseFloat(s.top);
+    if(s.position==='absolute' && (l<-500||tp<-500||s.visibility==='hidden')) return s;
+    return null;
+  };
+  ['offsetWidth','offsetHeight'].forEach(function(k){
+    var d=Object.getOwnPropertyDescriptor(HTMLElement.prototype,k);
+    if(!d||!d.get) return;
+    var g=d.get;
+    Object.defineProperty(HTMLElement.prototype,k,{configurable:true,get:function(){
+      try{
+        var s=hide(this);
+        if(s){ var old=s.fontFamily, parts=old.split(','); var last=parts[parts.length-1].trim().replace(/['"]/g,'').toLowerCase(); s.fontFamily=STD[last]?last:'sans-serif'; var v=g.call(this); s.fontFamily=old; return v; }
+      }catch(e){}
+      return g.call(this);
+    }});
+  });
+}catch(e){}
+})();
+"""
+
     fun main(
         host: String, skipMode: Int, dark: Boolean, youtube: Boolean,
         cosmetic: Boolean, annoy: Boolean, spy: Boolean, fp: Boolean, bg: Boolean, blockedTypes: List<String>

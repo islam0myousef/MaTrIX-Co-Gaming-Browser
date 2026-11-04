@@ -74,14 +74,14 @@ class SettingsScreen(
         val title = when (page) {
             "main" -> "الإعدادات"; "privacy" -> "الدرع والخصوصية"; "spy" -> "كاشف التجسس"; "ai" -> "المساعد الذكي (Claude)"
             "appearance" -> "المظهر"; "search" -> "محرك البحث"; "storage" -> "المساحة والأداء"; "games" -> "الألعاب"
-            "browsing" -> "التصفح"; "about" -> "حول MaTrIX Co"; "gxmods" -> "GX Mods"; "gxcontrol" -> "GX Control"; "filters" -> "عوامل تصفية المحتوى"; "iron" -> "الجدار الحديدي"; "gestures" -> "إيماءات التبويبات"; "keywords" -> "حجب بالكلمات"; "customrules" -> "عوامل تصفية مخصصة"; else -> "الإعدادات"
+            "browsing" -> "التصفح"; "about" -> "حول MaTrIX Co"; "gxmods" -> "GX Mods"; "gxcontrol" -> "GX Control"; "filters" -> "عوامل تصفية المحتوى"; "iron" -> "الجدار الحديدي"; "network" -> "الشبكة والـ VPN"; "gestures" -> "إيماءات التبويبات"; "keywords" -> "حجب بالكلمات"; "customrules" -> "عوامل تصفية مخصصة"; else -> "الإعدادات"
         }
         titleView.text = title
         when (page) {
             "main" -> main(col); "privacy" -> privacy(col); "spy" -> spy(col); "ai" -> ai(col); "appearance" -> appearance(col)
             "search" -> search(col); "storage" -> storage(col); "games" -> games(col); "browsing" -> browsing(col); "about" -> about(col)
             "gxmods" -> gxmods(col); "gxcontrol" -> gxcontrol(col)
-            "iron" -> iron(col); "gestures" -> gestures(col); "filters" -> filters(col); "customrules" -> customRules(col); "keywords" -> keywordsPage(col)
+            "iron" -> iron(col); "network" -> network(col); "gestures" -> gestures(col); "filters" -> filters(col); "customrules" -> customRules(col); "keywords" -> keywordsPage(col)
         }
         val sv = ScrollView(a).apply { isVerticalScrollBarEnabled = false }
         sv.addView(col, ViewGroup.LayoutParams(UiKit.MATCH, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -196,7 +196,10 @@ class SettingsScreen(
             toggle("lock", "قفل التطبيق", "بصمة أو PIN الجهاز عند الرجوع", Cfg.APPLOCK, false)
         ))
         section(col, "الجدار الحديدي")
-        card(col, listOf(nav("shield", "الجدار الحديدي", "تقييم الخطر • سجل المنع • القائمة البيضاء") { push("iron") }))
+        card(col, listOf(
+            nav("shield", "الجدار الحديدي", "تقييم الخطر • سجل المنع • القائمة البيضاء") { push("iron") },
+            nav("globe", "الشبكة والـ VPN", "Tor • بروكسي • DNS مشفّر • بدائل VPN مجانية") { push("network") }
+        ))
         section(col, "قفل الإعدادات")
         run {
             val on = PinLock.enabled()
@@ -320,6 +323,48 @@ class SettingsScreen(
             Cfg.setStr(FilterEngine.RULES_KEY, et.text.toString())
             FilterEngine.applyCustomRulesAsync(a) { n -> a.toastMsg(if (n >= 0) "✅ اتطبق ($n قاعدة)" else "⚠ حصل خطأ"); a.reloadCurrent() }
         })
+    }
+
+    // ───────── الشبكة والـ VPN (بدائل مجانية) ─────────
+
+    private fun network(col: LinearLayout) {
+        val vpn = NetGuard.vpnActive(a)
+        card(col, listOf(action("globe", if (vpn) "✓ فيه VPN شغّال على الجهاز" else "مفيش VPN شغّال", if (NetGuard.rule() != null) "المتصفح بيستخدم بروكسي: " + NetGuard.rule() else "الاتصال مباشر") { render() }))
+        col.addView(TextView(a).apply {
+            text = "المتصفح نفسه مبيشغّلش VPN (ده محتاج سيرفرات)، لكن بيربطك بأقوى البدائل المجانية وبيوفّر Tor وبروكسي وDNS مشفّر."
+            textSize = 12f; setTextColor(theme.sub); setPadding(dp(8), dp(8), dp(8), dp(4)); setLineSpacing(0f, 1.2f)
+        })
+        section(col, "VPN مجاني (تطبيقات موثوقة)")
+        card(col, NetGuard.vpnApps.map { app -> action("globe", app.name, app.note) { NetGuard.openOrStore(a, app.pkg) } })
+        section(col, "Tor (تصفح مجهول)")
+        card(col, listOf(
+            toggle("incognito", "التصفح عبر Tor", if (NetGuard.proxySupported()) "بيمرّر تصفح المتصفح على Orbot (127.0.0.1:8118) — شغّل Orbot الأول" else "إصدار WebView عندك مش بيدعم البروكسي", NetGuard.TOR, false) { NetGuard.apply(); a.reloadCurrent() },
+            action("globe", "فتح / تثبيت Orbot", "تطبيق Tor الرسمي") { NetGuard.openOrStore(a, "org.torproject.android") }
+        ))
+        section(col, "بروكسي مخصص")
+        card(col, listOf(action("code", "عنوان البروكسي", if (Cfg.str(NetGuard.CUSTOM, "").isBlank()) "مفيش (اضغط للإضافة)" else Cfg.str(NetGuard.CUSTOM, "")) {
+            ui.sheet { box, d ->
+                box.addView(ui.titleView("بروكسي مخصص"))
+                val inp = ui.input("host:port أو socks5://host:port", false, Cfg.str(NetGuard.CUSTOM, ""))
+                box.addView(inp); box.addView(ui.space(12))
+                box.addView(ui.button("حفظ وتطبيق") { Cfg.setStr(NetGuard.CUSTOM, inp.text.toString().trim()); NetGuard.apply(); d.dismiss(); a.reloadCurrent(); render() })
+                box.addView(ui.button("إلغاء البروكسي", false) { Cfg.setStr(NetGuard.CUSTOM, ""); NetGuard.apply(); d.dismiss(); a.reloadCurrent(); render() })
+            }
+        }))
+        section(col, "DNS مشفّر (Private DNS)")
+        col.addView(TextView(a).apply {
+            text = "اضغط على أي واحد ينسخ العنوان، وبعدها: إعدادات أندرويد ← الشبكة ← DNS الخاص ← اسم مضيف لمزود DNS، والصقه. بيشفّر طلبات DNS لكل التطبيقات."
+            textSize = 12f; setTextColor(theme.sub); setPadding(dp(8), dp(4), dp(8), dp(8)); setLineSpacing(0f, 1.2f)
+        })
+        card(col, NetGuard.dnsHosts.map { (h, note) ->
+            action("lock", h, note) {
+                try { (a.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("dns", h)) } catch (_: Exception) {}
+                a.toastMsg("اتنسخ: $h")
+            }
+        })
+        card(col, listOf(action("settings", "فتح إعدادات الشبكة", "عشان تلاقي DNS الخاص") {
+            try { a.startActivity(android.content.Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS)) } catch (_: Exception) { a.toastMsg("افتح إعدادات أندرويد ← الشبكة") }
+        }))
     }
 
     // ───────── الجدار الحديدي ─────────

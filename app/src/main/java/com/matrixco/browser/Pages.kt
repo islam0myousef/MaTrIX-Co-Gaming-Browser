@@ -164,6 +164,33 @@ body.wall{background:transparent}
 @keyframes ag{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
 .brand b{letter-spacing:1px}
 .glow{box-shadow:0 0 18px var(--ac)}
+.wm{display:none}.mt{display:none}
+body.opera .mt{display:block;position:fixed;left:0;bottom:0;width:100%;height:30vh;z-index:-1;pointer-events:none}
+body.opera .wimg.op{box-shadow:inset 0 0 0 100vmax rgba(0,0,0,.16)}
+body.opera .brand{display:none}
+body.opera .wm{display:block;text-align:center;font-size:46px;font-weight:500;letter-spacing:.5px;margin:2px 0 24px;color:#1d2742;text-shadow:0 1px 0 rgba(255,255,255,.25)}
+body.opera .wm b{font-weight:700;color:#2b1f5c}
+body.opera .m{background:rgba(20,22,34,.45);color:#fff}
+body.opera .search{background:rgba(22,25,38,.86);border-radius:30px;padding:5px 8px 5px 16px;box-shadow:0 6px 22px rgba(0,0,0,.28);margin-bottom:28px}
+body.opera .search input{color:#fff;font-size:16px}
+body.opera .search input::placeholder{color:rgba(255,255,255,.62)}
+body.opera .search .b{background:rgba(255,255,255,.08);color:#fff}
+body.opera .grid{grid-template-columns:repeat(5,1fr);gap:18px 2px}
+body.opera .ic{width:60px;height:60px;background:rgba(255,255,255,.16);box-shadow:0 3px 10px rgba(0,0,0,.2)}
+body.opera .ic img{width:34px;height:34px}
+body.opera .tile{color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.55);font-size:11px}
+body.opera .sec{color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.5)}
+body.opera .sec a{color:#ffd9b8}
+body.opera .strip a,body.opera .game,body.opera .item{background:rgba(22,24,36,.78);border-radius:20px;border:0}
+body.opera .item{padding:11px 14px;margin-bottom:8px}
+body.opera .strip a{border-radius:20px}
+body.opera .gx{gap:8px;overflow-x:auto}
+body.opera .gx button{clip-path:none;border-radius:22px;background:rgba(22,24,36,.7);color:#fff;padding:9px 16px;flex:none;font-size:12px}
+body.opera .gx button.on{background:#7a6cf0}
+body.opera .gxc{clip-path:none;border-radius:22px;background:rgba(22,24,36,.82);box-shadow:none;padding:12px;margin-bottom:12px;flex-direction:column;align-items:stretch}
+body.opera .gxc img{width:100%;height:170px;border-radius:16px}
+body.opera .gxc b{font-size:15px;line-height:1.5;margin-top:8px}
+body.opera .empty{color:#fff}
 """
 
     private fun page(t: MxTheme, title: String, body: String, bodyClass: String = ""): String =
@@ -173,10 +200,12 @@ body.wall{background:transparent}
 
 
     private fun wallpaper(ctx: Context, t: MxTheme): String {
-        val kind = Cfg.str(Cfg.WALL, "none")
+        val kind = Cfg.str(Cfg.WALL, "opera")
         if (kind == "none") return ""
         val acc = rgbaStr(t.accent, ".55"); val accSoft = rgbaStr(t.accent, ".18"); val accA = rgbaStr(t.accent, ".8"); val bg = t.bg.hex()
         return when (kind) {
+            "opera" -> "<div class=\"wimg op\" style=\"background:linear-gradient(180deg,#4c6c96 0%,#7d7fb0 30%,#c98a95 58%,#f1a67c 78%,#3a3050 100%)\"></div>" +
+                "<svg class=\"mt\" viewBox=\"0 0 400 160\" preserveAspectRatio=\"none\"><path d=\"M0 160 L0 95 L60 60 L110 100 L170 40 L240 105 L300 70 L360 110 L400 85 L400 160Z\" fill=\"#3b3560\" opacity=\".85\"/><path d=\"M0 160 L0 125 L80 95 L150 130 L230 90 L320 135 L400 110 L400 160Z\" fill=\"#2b2748\"/></svg>"
             "aurora" -> "<div class=\"aur\"></div>"
             "custom" -> {
                 val f = File(ctx.filesDir, "wall.jpg")
@@ -249,6 +278,7 @@ body.wall{background:transparent}
         Favicons.ensure(ctx, (sc.map { hostOf(it.url) } + games.map { hostOf(it.url) } + quick.map { hostOf(it.url) }).filter { it.isNotEmpty() })
 
         sb.append("<div class=\"top\"><a class=\"m\" href=\"mx://tools\">⋮</a><div class=\"brand\"><span><b>MaTrIX</b> GX</span><img src=\"").append(logo(ctx)).append("\"></div></div>")
+        sb.append("<div class=\"wm\">MaTrIX <b>Co</b></div>")
         sb.append("<form class=\"search\" onsubmit=\"return go()\"><input id=\"q\" placeholder=\"ابحث أو اكتب عنوان الموقع\" autocomplete=\"off\" autocapitalize=\"off\"><a class=\"b\" href=\"mx://voice\">🎤</a></form>")
 
         val custom = Cfg.str("shortcuts", "").isNotEmpty()
@@ -298,7 +328,7 @@ body.wall{background:transparent}
         for (e in list) sb.append(item(ctx, e.name, e.url, e.url, null))
 
         sb.append("<script>function go(){var v=document.getElementById('q').value.trim();if(v){location.href='mx://go?q='+encodeURIComponent(v);}return false;}function gx(i,b){var l=document.querySelectorAll('.gxlist'),k=document.querySelectorAll('.gx button');for(var j=0;j<l.length;j++){l[j].className='gxlist'+(j==i?' on':'');k[j].className=(j==i?'on':'')}}</script>")
-        return page(t, "MaTrIX GX", sb.toString(), if (wall.isEmpty()) "" else "wall")
+        return page(t, "MaTrIX Co", sb.toString(), if (wall.isEmpty()) "" else "wall" + (if (Cfg.str(Cfg.WALL, "opera") == "opera") " opera" else ""))
     }
 
     private fun history(ctx: Context, db: ShieldDatabase, t: MxTheme): String {
