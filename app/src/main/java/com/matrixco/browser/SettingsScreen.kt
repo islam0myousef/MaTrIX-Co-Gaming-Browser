@@ -74,14 +74,14 @@ class SettingsScreen(
         val title = when (page) {
             "main" -> "الإعدادات"; "privacy" -> "الدرع والخصوصية"; "spy" -> "كاشف التجسس"; "ai" -> "المساعد الذكي (Claude)"
             "appearance" -> "المظهر"; "search" -> "محرك البحث"; "storage" -> "المساحة والأداء"; "games" -> "الألعاب"
-            "browsing" -> "التصفح"; "about" -> "حول MaTrIX Co"; "gxmods" -> "GX Mods"; "gxcontrol" -> "GX Control"; "filters" -> "عوامل تصفية المحتوى"; "iron" -> "الجدار الحديدي"; "network" -> "الشبكة والـ VPN"; "gestures" -> "إيماءات التبويبات"; "keywords" -> "حجب بالكلمات"; "customrules" -> "عوامل تصفية مخصصة"; else -> "الإعدادات"
+            "browsing" -> "التصفح"; "about" -> "حول MaTrIX Co"; "gxmods" -> "GX Mods"; "gxcontrol" -> "GX Control"; "filters" -> "عوامل تصفية المحتوى"; "iron" -> "الجدار الحديدي"; "lists" -> "قوائم الحجب"; "network" -> "الشبكة والـ VPN"; "gestures" -> "إيماءات التبويبات"; "keywords" -> "حجب بالكلمات"; "customrules" -> "عوامل تصفية مخصصة"; else -> "الإعدادات"
         }
         titleView.text = title
         when (page) {
             "main" -> main(col); "privacy" -> privacy(col); "spy" -> spy(col); "ai" -> ai(col); "appearance" -> appearance(col)
             "search" -> search(col); "storage" -> storage(col); "games" -> games(col); "browsing" -> browsing(col); "about" -> about(col)
             "gxmods" -> gxmods(col); "gxcontrol" -> gxcontrol(col)
-            "iron" -> iron(col); "network" -> network(col); "gestures" -> gestures(col); "filters" -> filters(col); "customrules" -> customRules(col); "keywords" -> keywordsPage(col)
+            "iron" -> iron(col); "lists" -> blockLists(col); "network" -> network(col); "gestures" -> gestures(col); "filters" -> filters(col); "customrules" -> customRules(col); "keywords" -> keywordsPage(col)
         }
         val sv = ScrollView(a).apply { isVerticalScrollBarEnabled = false }
         sv.addView(col, ViewGroup.LayoutParams(UiKit.MATCH, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -223,7 +223,7 @@ class SettingsScreen(
         card(col, listOf(
             nav("shield_check", "عوامل تصفية المحتوى", "قوائم الإزعاج واللغات + قوائم وقواعد مخصصة") { push("filters") },
             action("reload", "تحديث القوائم الآن", RuleUpdater.getLastUpdate(a)?.let { "آخر تحديث: $it" } ?: "لم يتم بعد") { a.runUpdate(a.currentTab()) },
-            action("info", "القوائم النشطة (${names.size})", if (names.isEmpty()) "—" else names.joinToString(" • ")) {}
+            nav("info", "قوائم الحجب (${names.size} شغّالة)", if (names.isEmpty()) "اضغط لاختيار القوائم" else names.joinToString(" • ")) { push("lists") }
         ))
     }
 
@@ -322,6 +322,48 @@ class SettingsScreen(
         col.addView(ui.button("حفظ وتطبيق") {
             Cfg.setStr(FilterEngine.RULES_KEY, et.text.toString())
             FilterEngine.applyCustomRulesAsync(a) { n -> a.toastMsg(if (n >= 0) "✅ اتطبق ($n قاعدة)" else "⚠ حصل خطأ"); a.reloadCurrent() }
+        })
+    }
+
+    // ───────── قوائم الحجب (اختيار + مستويات + ترشيح) ─────────
+
+    private fun blockLists(col: LinearLayout) {
+        val lvl = RuleUpdater.currentLevel()
+        val on = RuleUpdater.enabledSources()
+        section(col, "مستوى الحماية (اختيار سريع)")
+        val presets = listOf(
+            Triple(1, "منخفض — خفيف وسريع", "قوائم أساسية قليلة، أقل استهلاك للذاكرة والبطارية"),
+            Triple(2, "متوسط — الموصى به", "توازن كويس بين قوة الحجب والسرعة"),
+            Triple(3, "عالي — أقوى حجب", "كل القوائم القوية: بيحجب أكتر بس بياخد ذاكرة ووقت تحديث أطول")
+        )
+        card(col, presets.map { (l, t, d) ->
+            action("shield", t, (if (lvl == l) "✓ المستوى الحالي — " else "") + d + " (" + RuleUpdater.sources.count { it.level <= l } + " قائمة)") { RuleUpdater.applyPreset(l); render() }
+        })
+        if (lvl == 0) col.addView(TextView(a).apply { text = "اختيارك الحالي مخصص (غيّرت قوائم بإيدك)."; textSize = 12f; setTextColor(theme.sub); setPadding(dp(8), dp(4), dp(8), dp(4)) })
+        card(col, listOf(action("reload", "تطبيق وتحديث الآن", "بيحمّل القوائم المختارة ويبني قاعدة الحجب (محتاج نت، ممكن ياخد دقيقة)") {
+            a.toastMsg("⏳ بحمّل ${on.size} قايمة...")
+            RuleUpdater.updateNow(a) { r -> a.toastMsg(r.message); if (stack.lastOrNull() == "lists") render() }
+        }))
+        val groups = listOf(1 to "أساسية", 2 to "موصى بها", 3 to "قوية (للمستوى العالي)", 9 to "اختيارية")
+        for ((g, title) in groups) {
+            val items = RuleUpdater.sources.filter { it.level == g }
+            if (items.isEmpty()) continue
+            section(col, title)
+            card(col, items.map { s ->
+                val st = RuleUpdater.statusOf(a, s.id)
+                val stT = when {
+                    st == null -> if (RuleUpdater.isOn(s)) "لسه ما اتحمّلتش" else "مقفولة"
+                    st.startsWith("ok:") -> "✓ " + st.removePrefix("ok:") + " نطاق"
+                    else -> "⚠ فشل (" + st.removePrefix("fail:") + ")"
+                }
+                toggle("shield", s.name, s.note + "  •  " + stT, "bl_on_" + s.id, s.level <= 2) { Cfg.setInt("bl_level", 0) }
+            })
+        }
+        section(col, "قوائم تانية")
+        card(col, listOf(nav("plus", "إضافة قائمة من رابط", "أي قائمة Adblock أو hosts بتحبها") { push("filters") }))
+        col.addView(TextView(a).apply {
+            text = "بعد ما تغيّر الاختيار اضغط \"تطبيق وتحديث الآن\" عشان الحجب يتغيّر فعليًا. الأحدث بتتحمّل كل 24 ساعة تلقائيًا."
+            textSize = 12f; setTextColor(theme.sub); setPadding(dp(8), dp(8), dp(8), dp(4)); setLineSpacing(0f, 1.2f)
         })
     }
 

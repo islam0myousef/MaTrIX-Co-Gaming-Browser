@@ -38,6 +38,9 @@ object FilterEngine {
         FilterList("fb_annoy", "Annoying distractions blocker", "Fanboy's Annoyances", "https://secure.fanboy.co.nz/fanboy-annoyance.txt", 0),
         FilterList("ubo_annoy", "Annoying distractions blocker (uBO)", "uBO Annoyances", gh("uBlockOrigin/uAssets/master/filters/annoyances-others.txt"), 0),
         FilterList("fb_social", "Social media blocker", "Fanboy's Social", "https://secure.fanboy.co.nz/fanboy-social.txt", 0),
+        FilterList("easylist_c", "إخفاء الإعلانات (EasyList)", "EasyList — قواعد إخفاء العناصر", "https://easylist.to/easylist/easylist.txt", 0),
+        FilterList("adguard_base", "إخفاء الإعلانات (AdGuard Base)", "AdGuard Base filter", ag(2), 0),
+        FilterList("ubo_filters", "إخفاء الإعلانات (uBlock filters)", "uBlock Origin filters", gh("uBlockOrigin/uAssets/master/filters/filters.txt"), 0),
         FilterList("porn", "Porn blocker", "StevenBlack Porn-only (+ بدائل)", gh("StevenBlack/hosts/master/alternates/porn-only/hosts"), 0, kind = FlKind.HOSTS,
             alt = listOf(
                 "https://blocklistproject.github.io/Lists/alt-version/porn-nl.txt",

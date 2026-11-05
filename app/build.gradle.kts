@@ -12,7 +12,7 @@ defaultConfig {
     minSdk = 23
     targetSdk = 28
     versionCode = 18
-    versionName = "3.9.1"
+    versionName = "3.9.0"
 }
 
 signingConfigs {

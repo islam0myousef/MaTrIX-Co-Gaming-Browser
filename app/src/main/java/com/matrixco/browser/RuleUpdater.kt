@@ -35,19 +35,49 @@ object RuleUpdater {
     private const val META_LAST_MSG = "remote_last_msg"
     private const val META_LISTS_OK = "remote_lists_ok"
 
-    private enum class Kind { HOSTS, DOMAINS, ADBLOCK }
-    private data class Source(val name: String, val url: String, val kind: Kind, val cat: Int)
+    enum class Kind { HOSTS, DOMAINS, ADBLOCK }
 
-    private val sources = listOf(
-        Source("StevenBlack", "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts", Kind.HOSTS, Cat.ADS),
-        Source("OISD", "https://big.oisd.nl/domainswild", Kind.DOMAINS, Cat.ADS),
-        Source("AdGuard DNS", "https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt", Kind.ADBLOCK, Cat.ADS),
-        Source("EasyList", "https://easylist.to/easylist/easylist.txt", Kind.ADBLOCK, Cat.ADS),
-        Source("EasyPrivacy", "https://easylist.to/easylist/easyprivacy.txt", Kind.ADBLOCK, Cat.TRK),
-        Source("uBlock filters", "https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/filters.txt", Kind.ADBLOCK, Cat.ADS),
-        Source("Peter Lowe", "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext", Kind.HOSTS, Cat.ADS),
-        Source("URLhaus (malware)", "https://urlhaus.abuse.ch/downloads/hostfile/", Kind.HOSTS, Cat.MAL)
+    /** level: 1 أساسية (منخفض) • 2 موصى بها (متوسط) • 3 قوية (عالي) • 9 اختيارية */
+    data class Source(val id: String, val name: String, val url: String, val kind: Kind, val cat: Int, val level: Int, val note: String)
+
+    val sources: List<Source> = listOf(
+        Source("stevenblack", "StevenBlack", "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts", Kind.HOSTS, Cat.ADS, 1, "إعلانات ومتتبعات — قائمة موحّدة (~80 ألف نطاق)، الأساس"),
+        Source("pgl", "Peter Lowe", "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext", Kind.HOSTS, Cat.ADS, 1, "إعلانات — خفيفة جدًا (~3 آلاف)"),
+        Source("adaway", "AdAway", "https://adaway.org/hosts.txt", Kind.HOSTS, Cat.ADS, 1, "إعلانات الموبايل (~6 آلاف)"),
+        Source("oisd", "OISD", "https://big.oisd.nl/domainswild", Kind.DOMAINS, Cat.ADS, 2, "شاملة وقليلة الأخطاء (~200 ألف)"),
+        Source("adguarddns", "AdGuard DNS", "https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt", Kind.ADBLOCK, Cat.ADS, 2, "إعلانات ومتتبعات (~50 ألف)"),
+        Source("easylist", "EasyList", "https://easylist.to/easylist/easylist.txt", Kind.ADBLOCK, Cat.ADS, 2, "قائمة إعلانات الويب الأشهر"),
+        Source("easyprivacy", "EasyPrivacy", "https://easylist.to/easylist/easyprivacy.txt", Kind.ADBLOCK, Cat.TRK, 2, "متتبعات وتحليلات"),
+        Source("urlhaus", "URLhaus", "https://urlhaus.abuse.ch/downloads/hostfile/", Kind.HOSTS, Cat.MAL, 2, "برمجيات خبيثة (بتتحدث كل ساعة)"),
+        Source("hagezi", "HaGeZi Pro", "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/pro.txt", Kind.HOSTS, Cat.ADS, 3, "قوية وحديثة للإعلانات والتتبع (~150 ألف)"),
+        Source("frogeye", "متتبعات الطرف الأول", "https://hostfiles.frogeye.fr/firstparty-trackers-hosts.txt", Kind.HOSTS, Cat.TRK, 3, "بتكشف المتتبعات المتخفية جوه دومين الموقع نفسه (CNAME)"),
+        Source("phishing", "Phishing Army", "https://phishing.army/download/phishing_army_blocklist.txt", Kind.DOMAINS, Cat.MAL, 3, "مواقع التصيد"),
+        Source("nocoin", "NoCoin", "https://raw.githubusercontent.com/hoshsadiq/adblock-nocoin-list/master/nocoin.txt", Kind.ADBLOCK, Cat.MAL, 3, "تعدين العملات الرقمية في الخفاء"),
+        Source("devdan", "Developer Dan", "https://www.github.developerdan.com/hosts/lists/ads-and-tracking-extended.txt", Kind.HOSTS, Cat.ADS, 3, "إعلانات وتتبع موسّعة"),
+        Source("pollock", "Dan Pollock", "https://someonewhocares.org/hosts/zero/hosts", Kind.HOSTS, Cat.ADS, 3, "قائمة شاملة قديمة وموثوقة"),
+        Source("ubo", "uBlock filters", "https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/filters.txt", Kind.ADBLOCK, Cat.ADS, 9, "اختيارية — أغلبها قواعد إخفاء، النطاقات فيها قليلة")
     )
+
+    private const val KEY_LEVEL = "bl_level"
+    private const val META_STATUS = "remote_status"
+
+    fun isOn(s: Source) = Cfg.bool("bl_on_" + s.id, s.level <= 2)
+    fun setOn(s: Source, v: Boolean) { Cfg.setBool("bl_on_" + s.id, v); Cfg.setInt(KEY_LEVEL, 0) }
+    fun enabledSources(): List<Source> = sources.filter { isOn(it) }
+
+    /** مستوى جاهز: 1 منخفض • 2 متوسط (موصى به) • 3 عالي */
+    fun applyPreset(level: Int) {
+        for (s in sources) Cfg.setBool("bl_on_" + s.id, s.level <= level)
+        Cfg.setInt(KEY_LEVEL, level)
+    }
+    fun currentLevel(): Int = Cfg.int(KEY_LEVEL, 2)
+
+    /** حالة آخر تحديث لكل قائمة: id -> "ok:N" أو "fail:سبب" */
+    fun statusOf(ctx: Context, id: String): String? {
+        val m = ShieldDatabase.getInstance(ctx).getMeta(META_STATUS) ?: return null
+        for (e in m.split('|')) { val i = e.indexOf('='); if (i > 0 && e.substring(0, i) == id) return e.substring(i + 1) }
+        return null
+    }
 
     private val executor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -73,7 +103,10 @@ object RuleUpdater {
         val report = ArrayList<String>()
         var total = 0
 
-        for (s in sources) {
+        val active = enabledSources()
+        if (active.isEmpty()) return UpdateResult(false, 0, "اختار قايمة واحدة على الأقل")
+        val status = ArrayList<String>()
+        for (s in active) {
             val target = lists.getOrPut(s.cat) { LongList() }
             var count = 0
             val sink: (String) -> Unit = { d -> target.add(Hash.of(d)); count++ }
@@ -85,9 +118,11 @@ object RuleUpdater {
                 }
             }
             if (!success || count < MIN_PER_SOURCE) {
+                status.add(s.id + "=fail:" + (if (!success) lastError else "قليلة ($count)").replace('|', ' ').replace('=', ' '))
                 report.add(s.name + ": فشل")
             } else {
                 ok.add(s.name); total += count
+                status.add(s.id + "=ok:" + count)
                 report.add(s.name + ": " + count)
             }
         }
@@ -109,7 +144,8 @@ object RuleUpdater {
         db.setMeta(META_LAST_MS, now.toString())
         db.setMeta(META_LAST_COUNT, unique.toString())
         db.setMeta(META_LISTS_OK, ok.joinToString(","))
-        val msg = "تم التحديث (" + ok.size + "/" + sources.size + " قوائم) — " + unique + " نطاق"
+        db.setMeta(META_STATUS, status.joinToString("|"))
+        val msg = "تم التحديث (" + ok.size + "/" + active.size + " قوائم) — " + unique + " نطاق"
         db.setMeta(META_LAST_MSG, msg + " | " + report.joinToString(" | "))
         return UpdateResult(true, unique, msg)
     }
