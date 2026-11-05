@@ -11,8 +11,8 @@ defaultConfig {
     applicationId = "com.matrixco.browser"
     minSdk = 23
     targetSdk = 28
-    versionCode = 17
-    versionName = "3.8.1"
+    versionCode = 18
+    versionName = "3.9.1"
 }
 
 signingConfigs {
