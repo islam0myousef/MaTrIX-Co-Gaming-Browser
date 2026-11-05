@@ -132,7 +132,7 @@ class SettingsScreen(
     }
 
     private fun radio(title: String, selected: Boolean, sub: String? = null, pick: () -> Unit): View {
-        val mark: View = if (selected) icon("check", theme.accent, 20) else View(a)
+        val mark: View = if (selected) icon("check", theme.accent, 20) else View(a).apply { layoutParams = LinearLayout.LayoutParams(dp(20), dp(20)) }
         return rowBase(null, title, sub, mark, pick)
     }
 
