@@ -252,8 +252,7 @@ class MainActivity : Activity() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        val night = newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK
-        if (Cfg.str(Cfg.THEME, "auto") == "auto" && night != lastNight) { lastNight = night; saveSession(); recreate() }
+        lastNight = newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK
     }
 
     /** شاشة بسيطة تعرض سبب آخر كراش (بدون أي اعتماد على باقي التطبيق) */
@@ -410,13 +409,13 @@ class MainActivity : Activity() {
         topBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(10), dp(8), dp(10), dp(8))
+            setPadding(dp(12), dp(9), dp(12), dp(9))
             setBackgroundColor(theme.bg)
         }
         val pill = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = Ui.round(theme.surface2, dp(24).toFloat())
+            background = Ui.round(theme.surface, dp(18).toFloat(), theme.accent.withAlpha(55), dp(1))
             setPadding(dp(4), 0, dp(2), 0)
         }
         shieldBadge = TextView(this).apply {
@@ -537,14 +536,15 @@ class MainActivity : Activity() {
         // ── الشريط السفلي (أسلوب GX: رجوع، تقدّم، زر GX المركزي، التبويبات، القائمة)
         bottomBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER
-            setBackgroundColor(theme.surface)
+            background = Ui.round(theme.surface, dp(18).toFloat(), theme.accent.withAlpha(38), dp(1))
+            elevation = dp(5).toFloat()
         }
         val defs = listOf("back", "forward", "bolt", "tabs", "dots")
         for (i in 0 until 5) {
             val iv = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER }
             if (i == 2) {
                 iv.setImageDrawable(IconDrawable("bolt", Color.WHITE, dp(24)))
-                iv.background = Ui.round(theme.accent, dp(23).toFloat(), theme.accent2, dp(1))
+                iv.background = Ui.grad(theme.accent, theme.accent2, dp(18).toFloat(), theme.accent2.withAlpha(180), dp(1), false)
                 iv.elevation = dp(6).toFloat()
                 val wrap = FrameLayout(this)
                 wrap.addView(iv, FrameLayout.LayoutParams(dp(46), dp(46), Gravity.CENTER))
@@ -1442,6 +1442,9 @@ class MainActivity : Activity() {
             "update" -> runUpdate(tab)
             "themes" -> showThemes()
             "tools" -> showTools()
+            "gaming" -> showGxControl()
+            "performance" -> showPerformanceLab()
+            "tabs" -> showTabs()
             "shield" -> showShield()
             "storage" -> openInternal("/storage")
             "cleancache" -> cleanCacheNow(tab)
@@ -1648,7 +1651,7 @@ class MainActivity : Activity() {
         if (!::hud.isInitialized) return
         val show = gameMode && Cfg.bool(Cfg.FPS, true) && customView == null
         hud.visibility = if (show) View.VISIBLE else View.GONE
-        if (show) hud.text = "FPS " + (if (lastFps > 0) lastFps else "--") + "  •  Ping " + (if (lastPing >= 0) "${lastPing}ms" else "--")
+        if (show) hud.text = "FPS " + (if (lastFps > 0) lastFps else "--") + "  •  TCP " + (if (lastPing >= 0) "${lastPing}ms" else "--")
     }
 
     private fun pingGame() {
@@ -1832,8 +1835,8 @@ class MainActivity : Activity() {
         dismissMenu(); dismissShield()
         val d = Dialog(this)
         d.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
-        val bg = Color.rgb(17, 18, 26); val card = Color.rgb(30, 31, 44); val card2 = Color.rgb(42, 43, 60)
-        val txt = Color.WHITE; val sub = Color.rgb(160, 162, 184); val teal = Color.rgb(120, 225, 200)
+        val bg = Color.rgb(9, 10, 16); val card = Color.rgb(20, 23, 35); val card2 = Color.rgb(29, 34, 49)
+        val txt = Color.WHITE; val sub = Color.rgb(157, 166, 190); val teal = theme.accent2
         val sheet = android.graphics.drawable.GradientDrawable().apply { setColor(bg); val r = dp(26).toFloat(); cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f) }
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_RTL; setPadding(dp(14), dp(14), dp(14), dp(18)) }
         val sv = ScrollView(this).apply { isVerticalScrollBarEnabled = false; background = sheet; addView(col, ViewGroup.LayoutParams(MATCH, WRAP)) }
@@ -1844,10 +1847,10 @@ class MainActivity : Activity() {
         // بطاقة الحالة
         val head = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(14), dp(12), dp(14), dp(12))
-            background = Ui.round(card, dp(22).toFloat())
+            background = Ui.round(card, dp(22).toFloat(), theme.accent.withAlpha(55), dp(1))
         }
         val av = FrameLayout(this).apply {
-            background = android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TL_BR, intArrayOf(Color.rgb(90, 120, 255), Color.rgb(235, 92, 200))).apply { shape = android.graphics.drawable.GradientDrawable.OVAL }
+            background = android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TL_BR, intArrayOf(theme.accent, theme.accent2)).apply { shape = android.graphics.drawable.GradientDrawable.OVAL }
             addView(ic("shield_check", Color.WHITE, 26), FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER))
         }
         head.addView(av, LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginEnd = dp(12) })
@@ -1868,7 +1871,7 @@ class MainActivity : Activity() {
         fun qBtn(icon: String, label: String, state: String, on: Boolean, click: () -> Unit) {
             val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; setOnClickListener { click() } }
             val circle = FrameLayout(this).apply { background = Ui.round(if (on) teal else card2, dp(28).toFloat()) }
-            circle.addView(ic(icon, if (on) Color.rgb(10, 40, 34) else txt, 24), FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
+            circle.addView(ic(icon, if (on) Color.rgb(18, 20, 25) else txt, 24), FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
             c.addView(circle, LinearLayout.LayoutParams(dp(60), dp(56)))
             c.addView(TextView(this).apply { text = label; textSize = 11f; setTextColor(txt); gravity = Gravity.CENTER; setPadding(0, dp(6), 0, 0) })
             c.addView(TextView(this).apply { text = state; textSize = 10f; setTextColor(sub); gravity = Gravity.CENTER })
@@ -1890,7 +1893,7 @@ class MainActivity : Activity() {
         // اختصارات
         fun tile(icon: String, label: String, click: () -> Unit): View = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(14), 0, dp(14), 0)
-            background = Ui.round(card, dp(18).toFloat())
+            background = Ui.round(card, dp(16).toFloat(), theme.accent.withAlpha(40), dp(1))
             addView(TextView(this@MainActivity).apply { text = label; textSize = 13f; setTextColor(txt) }, LinearLayout.LayoutParams(0, WRAP, 1f))
             addView(ic(icon, sub, 22), LinearLayout.LayoutParams(dp(22), dp(22)))
             setOnClickListener { d.dismiss(); click() }
@@ -1904,6 +1907,7 @@ class MainActivity : Activity() {
         tileRow(tile("bookmark", "المفضلات") { openInternal("/bookmarks") }, tile("download", "التنزيلات") { openDownloadsManager() })
         tileRow(tile("history", "المحفوظات") { openInternal("/history") }, tile("book", "صفحات غير متصلة") { openInternal("/offline") })
         tileRow(tile("game", "وضع الألعاب") { setGameMode(!gameMode, false) }, tile("incognito", "تبويب خاص") { newTab(Pages.HOME_URL, priv = true) })
+        tileRow(tile("bolt", "Performance Lab") { showPerformanceLab() }, tile("shield_check", "Security Center") { openInternal("/shield") })
 
         // بانر الشبكة والـ VPN
         val banner = LinearLayout(this).apply {
@@ -2222,6 +2226,100 @@ class MainActivity : Activity() {
         return Triple(total, avail, if (total > 0) (avail * 100 / total).toInt() else 100)
     }
 
+    /** لوحة أداء فعلية: تقرأ PSS للعملية وذاكرة النظام وحالة التبويبات الحالية. */
+    private fun showPerformanceLab() {
+        dismissMenu(); dismissShield()
+        val dialog = Dialog(this)
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+        val bg = Color.rgb(10, 12, 19)
+        val card = Color.rgb(22, 26, 39)
+        val sub = Color.rgb(153, 163, 185)
+        val col = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            setPadding(dp(18), dp(18), dp(18), dp(18))
+            background = Ui.round(bg, dp(26).toFloat(), theme.accent.withAlpha(85), dp(1))
+        }
+        val title = TextView(this).apply {
+            text = "PERFORMANCE LAB"
+            textSize = 18f; letterSpacing = .12f; typeface = Typeface.DEFAULT_BOLD
+            setTextColor(theme.accent2)
+        }
+        col.addView(title)
+        col.addView(TextView(this).apply {
+            text = "قياسات مباشرة من Android وWebView — لا توجد أرقام تقديرية."
+            textSize = 11f; setTextColor(sub); setPadding(0, dp(4), 0, dp(14))
+        })
+        val processValue = TextView(this)
+        val systemValue = TextView(this)
+        val tabsValue = TextView(this)
+        val blockValue = TextView(this)
+        val stateValue = TextView(this)
+        fun metric(label: String, value: TextView, accent: Int = theme.text): View {
+            val box = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(13), dp(12), dp(13), dp(12))
+                background = Ui.round(card, dp(16).toFloat())
+            }
+            box.addView(TextView(this).apply { text = label; textSize = 10f; setTextColor(sub) })
+            value.textSize = 20f; value.typeface = Typeface.DEFAULT_BOLD; value.setTextColor(accent)
+            value.setPadding(0, dp(5), 0, 0)
+            box.addView(value)
+            return box
+        }
+        val grid = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val left = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val right = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        left.addView(metric("استهلاك التطبيق (PSS)", processValue, theme.accent2), LinearLayout.LayoutParams(MATCH, WRAP).apply { bottomMargin = dp(8) })
+        left.addView(metric("التبويبات", tabsValue), LinearLayout.LayoutParams(MATCH, WRAP))
+        right.addView(metric("ذاكرة النظام المتاحة", systemValue, theme.accent2), LinearLayout.LayoutParams(MATCH, WRAP).apply { bottomMargin = dp(8) })
+        right.addView(metric("طلبات محجوبة في التبويب", blockValue), LinearLayout.LayoutParams(MATCH, WRAP))
+        grid.addView(left, LinearLayout.LayoutParams(0, WRAP, 1f).apply { marginEnd = dp(5) })
+        grid.addView(right, LinearLayout.LayoutParams(0, WRAP, 1f).apply { marginStart = dp(5) })
+        col.addView(grid)
+        stateValue.textSize = 11f; stateValue.setTextColor(sub); stateValue.setPadding(dp(2), dp(12), dp(2), dp(8))
+        col.addView(stateValue)
+        lateinit var refreshMetrics: () -> Unit
+        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val sleep = ui.button("تنويم الخلفية", false) { val n = sleepAll(); toast("تم تنويم $n تبويب"); refreshMetrics() }
+        val clean = ui.button("تنظيف الكاش", false) { cleanCacheNow(cur); refreshMetrics() }
+        actions.addView(sleep, LinearLayout.LayoutParams(0, WRAP, 1f).apply { marginEnd = dp(5) })
+        actions.addView(clean, LinearLayout.LayoutParams(0, WRAP, 1f).apply { marginStart = dp(5) })
+        col.addView(actions)
+        val footer = TextView(this).apply {
+            text = "ملاحظة: Android لا يسمح للمتصفح بالتحكم في CPU أو تخصيص الشبكة على مستوى النظام. هذه الشاشة تعرض قياسات متاحة للتطبيق فقط."
+            textSize = 10f; setTextColor(sub); setPadding(dp(2), dp(12), dp(2), 0)
+        }
+        col.addView(footer)
+        val scroll = ScrollView(this).apply { isFillViewport = true; addView(col) }
+        dialog.setContentView(scroll)
+        dialog.window?.apply {
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            setLayout(minOf(resources.displayMetrics.widthPixels - dp(24), dp(420)), WRAP)
+            attributes = attributes.apply { gravity = Gravity.CENTER }
+        }
+        var alive = true
+        fun update() {
+            val am = getSystemService(ACTIVITY_SERVICE) as ActivityManager
+            val pss = try { am.getProcessMemoryInfo(intArrayOf(android.os.Process.myPid())).firstOrNull()?.totalPss?.toLong()?.times(1024L) ?: 0L } catch (_: Throwable) { 0L }
+            val (total, available, _) = ramInfo()
+            processValue.text = if (pss > 0) Storage.fmt(pss) else "غير متاح"
+            systemValue.text = "${available} / ${total} MB"
+            tabsValue.text = "${tabs.size} مفتوح • ${tabs.count { it.sleeping }} نائم"
+            blockValue.text = (cur?.blocked?.get() ?: 0).toString()
+            stateValue.text = "الحالة: " + (if (gameMode) "Gaming Mode مفعّل" else "الوضع العادي") + " • تحديث تلقائي كل ثانيتين"
+        }
+        refreshMetrics = { update() }
+        val pulse = object : Runnable {
+            override fun run() { if (!alive || !dialog.isShowing) return; update(); h.postDelayed(this, 2000) }
+        }
+        dialog.setOnDismissListener { alive = false; h.removeCallbacks(pulse) }
+        dialog.show()
+        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        dialog.window?.setLayout(minOf(resources.displayMetrics.widthPixels - dp(24), dp(420)), WRAP)
+        update(); h.post(pulse)
+    }
+
     private fun sleepTab(t: Tab) {
         if (t === cur || t.popup || t.sleeping || !t.url.startsWith("http")) return
         t.pending = t.url
@@ -2324,7 +2422,7 @@ class MainActivity : Activity() {
         val chips = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutDirection = View.LAYOUT_DIRECTION_RTL }
         val cl = { LinearLayout.LayoutParams(0, WRAP, 1f).apply { setMargins(dp(3), 0, dp(3), 0) } }
         chips.addView(chip("game", "اللعب", gameMode) { setGameMode(!gameMode, false) }, cl())
-        chips.addView(chip("bolt", "FPS/Ping", Cfg.bool(Cfg.FPS, true)) { Cfg.setBool(Cfg.FPS, !Cfg.bool(Cfg.FPS, true)); updateHud() }, cl())
+        chips.addView(chip("bolt", "FPS/TCP", Cfg.bool(Cfg.FPS, true)) { Cfg.setBool(Cfg.FPS, !Cfg.bool(Cfg.FPS, true)); updateHud() }, cl())
         chips.addView(chip("desktop", "كمبيوتر", cur?.desktop == true) { setDesktop(cur?.desktop != true) }, cl())
         chips.addView(chip("full", "ملء الشاشة", fullscreen) { setFullscreen(!fullscreen) }, cl())
         chips.addView(chip("shield_check", "الدرع", AdBlocker.enabled()) { Cfg.setBool(Cfg.SHIELD, !Cfg.bool(Cfg.SHIELD, true)); cur?.web?.reload() }, cl())
@@ -2420,6 +2518,7 @@ class MainActivity : Activity() {
     internal fun reloadCurrent() { cur?.web?.reload() }
     internal fun openInternalPage(path: String) = openInternal(path)
     internal fun openDownloadsManager() = showDownloads()
+    internal fun openPerformanceLab() = showPerformanceLab()
     internal fun refreshHostSettings() { for (x in tabs) applyHostSettings(x) }
     internal fun applyThirdPartyCookies(on: Boolean) { for (x in tabs) CookieManager.getInstance().setAcceptThirdPartyCookies(x.web, on) }
     internal fun applyDataSaver(on: Boolean) { for (x in tabs) x.web.settings.loadsImagesAutomatically = !on; cur?.web?.reload() }
@@ -2504,12 +2603,14 @@ class MainActivity : Activity() {
         val selected = HashSet<Tab>()
         var menuOpen = false
 
-        val pBg = Color.rgb(20, 11, 36); val pCard = Color.rgb(42, 26, 70); val pAcc = Color.rgb(184, 140, 255)
-        fun bgC() = if (priv) pBg else Color.rgb(27, 22, 70)
-        fun cardC() = if (priv) pCard else Color.rgb(60, 52, 128)
-        fun accC() = if (priv) pAcc else Color.rgb(184, 172, 255)
+        val privateBg = Color.rgb(17, 12, 31)
+        val privateCard = Color.rgb(35, 24, 58)
+        val privateAccent = Color.rgb(194, 155, 255)
+        fun bgC() = if (priv) privateBg else theme.bg
+        fun cardC() = if (priv) privateCard else theme.surface
+        fun accC() = if (priv) privateAccent else theme.accent2
         fun txtC() = Color.WHITE
-        fun subC() = if (priv) Color.rgb(176, 160, 205) else Color.rgb(190, 184, 235)
+        fun subC() = if (priv) Color.rgb(181, 164, 210) else theme.sub
 
         val rootV = FrameLayout(this).apply { layoutDirection = View.LAYOUT_DIRECTION_RTL }
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }

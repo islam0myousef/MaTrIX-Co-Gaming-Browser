@@ -16,6 +16,10 @@ import java.util.Locale
 object Storage {
     data class Info(val cache: Long, val web: Long, val offline: Long, val db: Long) { val total get() = cache + web + offline + db }
 
+    @Volatile private var cachedInfo: Info? = null
+    @Volatile private var lastComputedAt = 0L
+    private val computeLock = Any()
+
     fun dirSize(f: File): Long {
         if (!f.exists()) return 0L
         if (f.isFile) return f.length()
@@ -33,17 +37,29 @@ object Storage {
     private fun webDir(ctx: Context) = File(ctx.applicationInfo.dataDir, "app_webview")
 
     fun compute(ctx: Context): Info {
-        val w = webDir(ctx)
-        val cache = dirSize(ctx.cacheDir) + dirSize(File(w, "Default/HTTP Cache")) + dirSize(File(w, "Default/Code Cache")) +
-            dirSize(File(w, "Default/GPUCache")) + dirSize(File(w, "Default/Service Worker/CacheStorage"))
-        val web = (dirSize(w) - (cache - dirSize(ctx.cacheDir))).coerceAtLeast(0L)
-        return Info(cache, web, dirSize(File(ctx.filesDir, "offline")), ShieldDatabase.getInstance(ctx).dbSizeBytes())
+        val now = System.currentTimeMillis()
+        cachedInfo?.let { if (now - lastComputedAt < 15_000L) return it }
+        synchronized(computeLock) {
+            val checkAt = System.currentTimeMillis()
+            cachedInfo?.let { if (checkAt - lastComputedAt < 15_000L) return it }
+            val w = webDir(ctx)
+            val cache = dirSize(ctx.cacheDir) + dirSize(File(w, "Default/HTTP Cache")) + dirSize(File(w, "Default/Code Cache")) +
+                dirSize(File(w, "Default/GPUCache")) + dirSize(File(w, "Default/Service Worker/CacheStorage"))
+            val web = (dirSize(w) - (cache - dirSize(ctx.cacheDir))).coerceAtLeast(0L)
+            val result = Info(cache, web, dirSize(File(ctx.filesDir, "offline")), ShieldDatabase.getInstance(ctx).dbSizeBytes())
+            cachedInfo = result
+            lastComputedAt = checkAt
+            return result
+        }
     }
+
+    fun invalidate() { synchronized(computeLock) { cachedInfo = null; lastComputedAt = 0L } }
 
     fun cleanCache(ctx: Context) {
         val w = webDir(ctx)
         del(ctx.cacheDir)
         for (p in listOf("Default/HTTP Cache", "Default/Code Cache", "Default/GPUCache", "Default/Service Worker/CacheStorage")) del(File(w, p))
+        invalidate()
     }
 
     fun fmt(b: Long): String = when {
@@ -100,97 +116,79 @@ object Pages {
     private fun hostOf(u: String): String = try { Uri.parse(u).host.orEmpty() } catch (_: Exception) { "" }
 
     private fun css(t: MxTheme): String = """
-:root{--bg:${t.bg.hex()};--sf:${t.surface.hex()};--sf2:${t.surface2.hex()};--ac:${t.accent.hex()};--ac2:${t.accent2.hex()};--tx:${t.text.hex()};--sb:${t.sub.hex()}}
+:root{--bg:${t.bg.hex()};--sf:${t.surface.hex()};--sf2:${t.surface2.hex()};--ac:${t.accent.hex()};--ac2:${t.accent2.hex()};--tx:${t.text.hex()};--sb:${t.sub.hex()};--line:rgba(255,255,255,.09);--glass:rgba(18,21,32,.82);--lime:#d2ff4e;--purple:#975cff}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html{background:var(--bg)}
-body{margin:0 auto;color:var(--tx);font-family:system-ui,Roboto,sans-serif;font-size:14px;padding:12px 14px 40px;max-width:760px;background:var(--bg);min-height:100vh}
+html{background:var(--bg);scroll-behavior:smooth}
+body{margin:0 auto;color:var(--tx);font-family:system-ui,Roboto,sans-serif;font-size:14px;padding:18px 16px 48px;max-width:820px;background:var(--bg);min-height:100vh;overflow-x:hidden}
 a{color:inherit;text-decoration:none}
-.top{display:flex;align-items:center;justify-content:space-between;margin:2px 0 22px}
-.brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px;color:var(--sb)}
-.brand img{width:26px;height:26px;border-radius:7px}
-.m{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--sb);font-size:20px}
-.search{display:flex;align-items:center;gap:6px;background:var(--sf2);border-radius:26px;padding:3px 6px 3px 16px;margin:0 auto 26px;max-width:640px}
-.search input{flex:1;background:transparent;border:0;outline:0;color:var(--tx);font-size:15px;padding:13px 4px;min-width:0}
-.search .b{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--sb);font-size:17px;background:transparent;border:0}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:18px 6px;margin-bottom:22px}
-.tile{display:flex;flex-direction:column;align-items:center;gap:7px;font-size:11px;color:var(--sb);position:relative;text-align:center}
-.ic{width:52px;height:52px;border-radius:50%;background:var(--sf2);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:600;color:var(--tx);overflow:hidden}
-.ic img{width:30px;height:30px;border-radius:6px;object-fit:contain}
-.tile .x{position:absolute;top:-4px;right:12px;width:18px;height:18px;border-radius:50%;background:var(--sf);color:var(--sb);font-size:10px;display:flex;align-items:center;justify-content:center}
-.strip{display:flex;gap:8px;margin-bottom:22px}
-.strip a{flex:1;background:var(--sf);border-radius:14px;padding:11px 8px;text-align:center}
-.strip b{display:block;font-size:17px;font-weight:600;margin-bottom:2px}
-.strip span{font-size:10px;color:var(--sb)}
-.sec{display:flex;justify-content:space-between;align-items:center;margin:22px 4px 10px;font-size:12px;color:var(--sb)}
-.sec b{font-weight:600;letter-spacing:.2px}
-.sec a{color:var(--ac)}
-.games{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
-.game{display:flex;align-items:center;gap:10px;background:var(--sf);border-radius:14px;padding:12px}
-.game .ic{width:38px;height:38px;flex:none}
-.game .ic img{width:24px;height:24px}
-.game b{display:block;font-size:13px;font-weight:600}
-.game small{color:var(--sb);font-size:10px;direction:ltr;display:block}
-.item{display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid var(--sf2)}
-.item .ic{width:34px;height:34px;flex:none;font-size:14px}
-.item .ic img{width:20px;height:20px}
-.item .t{flex:1;min-width:0}
-.item .t b{display:block;font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.item .t span{font-size:11px;color:var(--sb);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;direction:ltr;text-align:right}
-.x2{color:var(--sb);padding:6px 10px;font-size:15px}
-.empty{text-align:center;color:var(--sb);padding:40px 10px}
-.row{display:flex;justify-content:space-between;padding:11px 4px;border-bottom:1px solid var(--sf2);font-size:13px}
-.row span:first-child{color:var(--sb)}
-.ptop{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-.ptop h2{margin:0;font-size:17px;font-weight:600}
-.btn{display:inline-block;background:var(--ac);color:#fff;border-radius:12px;padding:9px 18px;font-size:13px;margin:4px 3px}
-.btn.alt{background:var(--sf2);color:var(--tx)}
-.card{background:var(--sf);border-radius:14px;padding:14px;margin-bottom:12px}
-.card h4{margin:0 0 8px;font-size:12px;color:var(--sb);font-weight:500}
-.bars{display:flex;align-items:flex-end;justify-content:space-between;gap:5px;height:80px}
-.bars div{flex:1;background:var(--ac);border-radius:4px 4px 1px 1px;min-height:3px;opacity:.85}
-.chip{display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:600;color:#fff}
-.small{font-size:11px;color:var(--sb)}
-.gx{display:flex;gap:6px;margin:4px 0 12px}
-.gx button{flex:1;background:var(--sf);color:var(--sb);border:0;padding:11px 4px;font-weight:700;font-size:12px;letter-spacing:.4px;font-family:inherit;clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px))}
-.gx button.on{background:var(--ac);color:#fff}
+button,input{font:inherit}
+.top{display:flex;align-items:center;justify-content:space-between;margin:0 0 26px;position:relative;z-index:2}
+.brand{display:flex;align-items:center;gap:10px;font-weight:900;font-size:15px;letter-spacing:1.5px;color:var(--tx)}
+.brand img{width:34px;height:34px;border-radius:11px;box-shadow:0 0 24px rgba(151,92,255,.25)}
+.brand small{display:block;font-size:9px;letter-spacing:2.4px;color:var(--sb);font-weight:700;margin-top:1px}
+.m{width:42px;height:42px;border:1px solid var(--line);border-radius:14px;display:flex;align-items:center;justify-content:center;color:var(--tx);font-size:21px;background:var(--glass);backdrop-filter:blur(16px)}
+.hero{position:relative;padding:28px 20px 22px;border:1px solid rgba(151,92,255,.24);border-radius:28px;background:radial-gradient(ellipse at 92% 0%,rgba(151,92,255,.24),transparent 48%),radial-gradient(ellipse at 4% 100%,rgba(210,255,78,.09),transparent 42%),linear-gradient(145deg,#171a29,#10121c 72%);overflow:hidden;margin-bottom:18px;box-shadow:0 18px 48px rgba(0,0,0,.24)}
+.hero:after{content:"";position:absolute;width:190px;height:190px;border:1px solid rgba(210,255,78,.16);border-radius:50%;right:-92px;top:-110px;box-shadow:0 0 0 22px rgba(210,255,78,.025),0 0 0 48px rgba(151,92,255,.035)}
+.eyebrow{font-size:10px;letter-spacing:2.5px;font-weight:900;color:var(--lime);text-transform:uppercase;display:flex;align-items:center;gap:8px}
+.live{width:7px;height:7px;border-radius:50%;background:var(--lime);box-shadow:0 0 12px var(--lime)}
+.hero-title{font-size:35px;line-height:1.12;letter-spacing:-1.4px;font-weight:950;margin:14px 0 7px;position:relative;z-index:1;color:#fff}.hero-title b{color:var(--lime);font-weight:950}
+.wm b{color:var(--lime);font-weight:950}
+.tagline{font-size:12px;color:#a7adc1;margin:0 0 20px;position:relative;z-index:1}
+.search{display:flex;align-items:center;gap:8px;background:#090b12;border:1px solid rgba(255,255,255,.12);border-radius:17px;padding:5px 6px 5px 14px;margin:0;position:relative;z-index:1;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.search input{flex:1;background:transparent;border:0;outline:0;color:#fff;font-size:14px;padding:13px 2px;min-width:0}
+.search input::placeholder{color:#777f96}
+.search .b{width:42px;height:42px;border-radius:13px;display:flex;align-items:center;justify-content:center;color:#111;background:var(--lime);border:0;font-size:17px;font-weight:900}
+.section{display:flex;justify-content:space-between;align-items:center;margin:24px 2px 12px}
+.section .heading{display:flex;align-items:center;gap:9px;font-size:12px;letter-spacing:1.3px;font-weight:900}
+.section .bar{height:17px;width:3px;border-radius:4px;background:var(--lime);box-shadow:0 0 10px rgba(210,255,78,.4)}
+.section a{color:var(--lime);font-size:11px;font-weight:800}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.tile{display:flex;flex-direction:column;align-items:center;gap:8px;font-size:11px;color:#c8cce0;position:relative;text-align:center;min-width:0;padding:12px 4px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(145deg,rgba(255,255,255,.045),rgba(255,255,255,.015));min-height:100px;justify-content:center}
+.ic{width:48px;height:48px;border-radius:16px;background:linear-gradient(145deg,#282b40,#171a28);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;color:var(--lime);overflow:hidden;box-shadow:0 8px 18px rgba(0,0,0,.18)}
+.ic img{width:27px;height:27px;border-radius:8px;object-fit:contain}
+.tile .x{position:absolute;top:5px;right:7px;width:18px;height:18px;border-radius:6px;background:#402033;color:#ff8ba6;font-size:10px;display:flex;align-items:center;justify-content:center}
+.strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:18px 0}
+.strip a{min-width:0;background:linear-gradient(145deg,#1b2030,#131722);border:1px solid var(--line);border-radius:17px;padding:13px 8px;text-align:center}
+.strip b{display:block;font-size:18px;font-weight:900;margin-bottom:4px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.strip span{font-size:9px;color:#a6aec4;display:block;line-height:1.4}
+.games{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.game{display:flex;align-items:center;gap:11px;min-width:0;background:linear-gradient(145deg,#202438,#151927);border:1px solid rgba(151,92,255,.18);border-radius:19px;padding:13px;position:relative;overflow:hidden}
+.game:after{content:"";position:absolute;right:-24px;bottom:-38px;width:88px;height:88px;border-radius:50%;background:rgba(151,92,255,.09)}
+.game .ic{width:42px;height:42px;flex:none;border-radius:13px}
+.game .ic img{width:25px;height:25px}
+.game b{display:block;font-size:12px;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.game small{color:#969fb6;font-size:9px;direction:ltr;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:4px}
+.game .launch{margin-inline-start:auto;color:var(--lime);font-size:17px;z-index:1}
+.control-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.control{display:flex;align-items:center;gap:10px;padding:13px;background:#171b29;border:1px solid var(--line);border-radius:16px;min-width:0}
+.control .symbol{width:34px;height:34px;display:grid;place-items:center;border-radius:11px;background:rgba(151,92,255,.16);color:#c4a5ff;font-size:16px}
+.control b{font-size:11px;display:block}.control small{display:block;font-size:9px;color:#929bb2;margin-top:3px}
+.gx{display:flex;gap:7px;margin:5px 0 13px;overflow-x:auto;scrollbar-width:none}.gx::-webkit-scrollbar{display:none}
+.gx button{flex:none;background:#1b2030;color:#aeb5ca;border:1px solid var(--line);padding:10px 16px;font-weight:800;font-size:11px;border-radius:12px;font-family:inherit}
+.gx button.on{background:var(--lime);border-color:var(--lime);color:#11151c}
 .gxlist{display:none}.gxlist.on{display:block}
-.gxc{display:flex;gap:10px;align-items:center;background:var(--sf);padding:9px 10px;margin-bottom:8px;box-shadow:inset 3px 0 0 var(--ac);clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,12px 100%,0 calc(100% - 12px))}
-.gxc img{width:68px;height:46px;object-fit:cover;border-radius:4px;flex:none;background:var(--sf2)}
-.gxc b{font-size:13px;display:block;font-weight:600;line-height:1.35}
-.gxc small{color:var(--sb);font-size:10px}
-canvas#bg,.aur,.wimg{position:fixed;left:0;top:0;width:100%;height:100%;z-index:-1}
-body.wall{background:transparent}
-.aur{background:linear-gradient(135deg,var(--bg),var(--ac2x),var(--bg),var(--acx));background-size:300% 300%;animation:ag 14s ease infinite}
-@keyframes ag{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
-.brand b{letter-spacing:1px}
-.glow{box-shadow:0 0 18px var(--ac)}
-.wm{display:none}.mt{display:none}
-body.opera .mt{display:block;position:fixed;left:0;bottom:0;width:100%;height:30vh;z-index:-1;pointer-events:none}
-body.opera .wimg.op{box-shadow:inset 0 0 0 100vmax rgba(0,0,0,.16)}
-body.opera .brand{display:none}
-body.opera .wm{display:block;text-align:center;font-size:46px;font-weight:500;letter-spacing:.5px;margin:2px 0 24px;color:#1d2742;text-shadow:0 1px 0 rgba(255,255,255,.25)}
-body.opera .wm b{font-weight:700;color:#2b1f5c}
-body.opera .m{background:rgba(20,22,34,.45);color:#fff}
-body.opera .search{background:rgba(22,25,38,.86);border-radius:30px;padding:5px 8px 5px 16px;box-shadow:0 6px 22px rgba(0,0,0,.28);margin-bottom:28px}
-body.opera .search input{color:#fff;font-size:16px}
-body.opera .search input::placeholder{color:rgba(255,255,255,.62)}
-body.opera .search .b{background:rgba(255,255,255,.08);color:#fff}
-body.opera .grid{grid-template-columns:repeat(5,1fr);gap:18px 2px}
-body.opera .ic{width:60px;height:60px;background:rgba(255,255,255,.16);box-shadow:0 3px 10px rgba(0,0,0,.2)}
-body.opera .ic img{width:34px;height:34px}
-body.opera .tile{color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.55);font-size:11px}
-body.opera .sec{color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.5)}
-body.opera .sec a{color:#ffd9b8}
-body.opera .strip a,body.opera .game,body.opera .item{background:rgba(22,24,36,.78);border-radius:20px;border:0}
-body.opera .item{padding:11px 14px;margin-bottom:8px}
-body.opera .strip a{border-radius:20px}
-body.opera .gx{gap:8px;overflow-x:auto}
-body.opera .gx button{clip-path:none;border-radius:22px;background:rgba(22,24,36,.7);color:#fff;padding:9px 16px;flex:none;font-size:12px}
-body.opera .gx button.on{background:#7a6cf0}
-body.opera .gxc{clip-path:none;border-radius:22px;background:rgba(22,24,36,.82);box-shadow:none;padding:12px;margin-bottom:12px;flex-direction:column;align-items:stretch}
-body.opera .gxc img{width:100%;height:170px;border-radius:16px}
-body.opera .gxc b{font-size:15px;line-height:1.5;margin-top:8px}
-body.opera .empty{color:#fff}
+.gxc{display:flex;gap:11px;align-items:center;background:linear-gradient(145deg,#1b2030,#131722);border:1px solid var(--line);padding:11px;margin-bottom:9px;border-radius:16px}
+.gxc img{width:72px;height:58px;object-fit:cover;border-radius:11px;flex:none;background:var(--sf2)}
+.gxc b{font-size:12px;display:block;font-weight:800;line-height:1.45}.gxc small{color:#929bb2;font-size:10px}
+.item{display:flex;align-items:center;gap:12px;padding:11px 12px;border:1px solid var(--line);border-radius:15px;background:#151a27;margin-bottom:8px}
+.item .ic{width:36px;height:36px;flex:none;font-size:14px;border-radius:11px}.item .ic img{width:22px;height:22px}.item .t{flex:1;min-width:0}.item .t b{display:block;font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.item .t span{font-size:10px;color:#929bb2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;direction:ltr;text-align:right}.x2{color:#ff8ba6;padding:6px 8px;font-size:15px}
+.empty{text-align:center;color:#939bb0;padding:30px 10px}
+.row{display:flex;justify-content:space-between;padding:11px 4px;border-bottom:1px solid var(--sf2);font-size:13px}.row span:first-child{color:var(--sb)}
+.ptop{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}.ptop h2{margin:0;font-size:17px;font-weight:800}
+.btn{display:inline-block;background:var(--ac);color:#fff;border-radius:12px;padding:9px 18px;font-size:13px;margin:4px 3px}.btn.alt{background:var(--sf2);color:var(--tx)}
+.card{background:var(--sf);border:1px solid var(--line);border-radius:17px;padding:14px;margin-bottom:12px}.card h4{margin:0 0 8px;font-size:12px;color:var(--sb);font-weight:700}
+.security-hero{padding:18px;border-radius:22px;background:radial-gradient(ellipse at 95% 0%,rgba(210,255,78,.13),transparent 45%),linear-gradient(145deg,#1b2530,#121722);border:1px solid rgba(210,255,78,.2);margin-bottom:12px}.security-hero .state{font-size:10px;letter-spacing:1.8px;font-weight:900;color:var(--lime)}.security-hero h2{font-size:20px;margin:9px 0 5px}.security-hero p{font-size:11px;line-height:1.7;color:#a9b2c7;margin:0}.status-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}.status-card{padding:12px;border:1px solid var(--line);border-radius:15px;background:#171c29;min-width:0}.status-card b{display:block;font-size:12px;margin-bottom:5px}.status-card span{font-size:10px;color:#9ca6bd;line-height:1.5}.status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-left:5px;background:var(--lime);box-shadow:0 0 8px rgba(210,255,78,.45)}.status-dot.off{background:#ff647c;box-shadow:0 0 8px rgba(255,100,124,.35)}
+.bars{display:flex;align-items:flex-end;justify-content:space-between;gap:5px;height:80px}.bars div{flex:1;background:var(--ac);border-radius:4px 4px 1px 1px;min-height:3px;opacity:.85}
+.chip{display:inline-block;padding:3px 9px;border-radius:10px;font-size:10px;font-weight:800;color:#10131b;background:var(--lime)}.small{font-size:11px;color:var(--sb)}
+canvas#bg,.aur,.wimg{position:fixed;left:0;top:0;width:100%;height:100%;z-index:-1}.aur{background:linear-gradient(135deg,var(--bg),#17152b,var(--bg));background-size:300% 300%;animation:ag 18s ease infinite}@keyframes ag{0%{background-position:0 50%}50%{background-position:100% 50%}100%{background-position:0 50%}}
+.brand b{letter-spacing:1px}.wm,.mt{display:none}
+body.wall .hero{background:radial-gradient(ellipse at 90% 0%,rgba(151,92,255,.26),transparent 50%),linear-gradient(145deg,#171a29,#10121c)}
+body.opera .wimg.op{background:radial-gradient(ellipse at 85% 0%,rgba(151,92,255,.25),transparent 40%),radial-gradient(ellipse at 5% 95%,rgba(210,255,78,.08),transparent 35%),#0b0d15!important}
+body.opera .wm{display:none}
+body.opera .top{margin-bottom:22px}
+@media(min-width:560px){body{padding:26px 28px 60px}.hero{padding:38px 32px 28px}.hero-title{font-size:46px}.grid{grid-template-columns:repeat(7,minmax(0,1fr))}.games{grid-template-columns:repeat(3,minmax(0,1fr))}.strip a{padding:17px}.strip b{font-size:22px}}
+@media(max-width:360px){body{padding:14px 12px 40px}.hero{padding:23px 15px 17px}.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.hero-title{font-size:30px}.strip{gap:6px}.strip a{padding:11px 5px}.strip b{font-size:15px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
 """
 
     private fun page(t: MxTheme, title: String, body: String, bodyClass: String = ""): String =
@@ -200,10 +198,12 @@ body.opera .empty{color:#fff}
 
 
     private fun wallpaper(ctx: Context, t: MxTheme): String {
-        val kind = Cfg.str(Cfg.WALL, "opera")
+        val kind = Cfg.str(Cfg.WALL, "gx")
         if (kind == "none") return ""
         val acc = rgbaStr(t.accent, ".55"); val accSoft = rgbaStr(t.accent, ".18"); val accA = rgbaStr(t.accent, ".8"); val bg = t.bg.hex()
         return when (kind) {
+            "gx" -> "<div class=\"wimg op\" style=\"background:radial-gradient(ellipse at 82% 5%,rgba(151,92,255,.20),transparent 38%),radial-gradient(ellipse at 8% 92%,rgba(210,255,78,.08),transparent 34%),#0b0d15\"></div>" +
+                "<svg class=\"mt\" viewBox=\"0 0 400 160\" preserveAspectRatio=\"none\"><path d=\"M0 160 L0 105 L70 70 L125 115 L205 48 L270 112 L340 66 L400 100 L400 160Z\" fill=\"#211b3b\" opacity=\".75\"/><path d=\"M0 160 L0 132 L90 104 L160 138 L250 98 L330 138 L400 112 L400 160Z\" fill=\"#141a24\"/></svg>"
             "opera" -> "<div class=\"wimg op\" style=\"background:linear-gradient(180deg,#4c6c96 0%,#7d7fb0 30%,#c98a95 58%,#f1a67c 78%,#3a3050 100%)\"></div>" +
                 "<svg class=\"mt\" viewBox=\"0 0 400 160\" preserveAspectRatio=\"none\"><path d=\"M0 160 L0 95 L60 60 L110 100 L170 40 L240 105 L300 70 L360 110 L400 85 L400 160Z\" fill=\"#3b3560\" opacity=\".85\"/><path d=\"M0 160 L0 125 L80 95 L150 130 L230 90 L320 135 L400 110 L400 160Z\" fill=\"#2b2748\"/></svg>"
             "aurora" -> "<div class=\"aur\"></div>"
@@ -274,33 +274,50 @@ body.opera .empty{color:#fff}
         val sc = readEntries("shortcuts", defaultShortcuts)
         val games = readEntries("games", defaultGames)
         val quick = db.getBookmarks(5)
-        // نجلب الأيقونات الناقصة في الخلفية
         Favicons.ensure(ctx, (sc.map { hostOf(it.url) } + games.map { hostOf(it.url) } + quick.map { hostOf(it.url) }).filter { it.isNotEmpty() })
 
-        sb.append("<div class=\"top\"><a class=\"m\" href=\"mx://tools\">⋮</a><div class=\"brand\"><span><b>MaTrIX</b> GX</span><img src=\"").append(logo(ctx)).append("\"></div></div>")
-        sb.append("<div class=\"wm\">MaTrIX <b>Co</b></div>")
-        sb.append("<form class=\"search\" onsubmit=\"return go()\"><input id=\"q\" placeholder=\"ابحث أو اكتب عنوان الموقع\" autocomplete=\"off\" autocapitalize=\"off\"><a class=\"b\" href=\"mx://voice\">🎤</a></form>")
+        sb.append("<div class=\"top\"><div class=\"brand\"><img src=\"").append(logo(ctx))
+            .append("\"><div><b>MaTrIX Co</b><small>GAMING BROWSER</small></div></div><a class=\"m\" href=\"mx://tools\" aria-label=\"القائمة\">☰</a></div>")
+        sb.append("<section class=\"hero\"><div class=\"eyebrow\"><i class=\"live\"></i> GX BROWSER • READY</div>")
+        sb.append("<div class=\"hero-title\">PLAY <b>WITHOUT LIMITS</b></div><p class=\"tagline\">تصفح أسرع. تحكم أكبر. خصوصية تحت سيطرتك.</p>")
+        sb.append("<form class=\"search\" onsubmit=\"return go()\"><input id=\"q\" placeholder=\"ابحث أو اكتب عنوان الموقع...\" autocomplete=\"off\" autocapitalize=\"off\"><a class=\"b\" href=\"mx://voice\" aria-label=\"بحث صوتي\">⌕</a></form></section>")
 
+        sb.append("<div class=\"section\"><div class=\"heading\"><i class=\"bar\"></i> QUICK ACCESS</div><a href=\"mx://addsc\">＋ إضافة اختصار</a></div><div class=\"grid\">")
         val custom = Cfg.str("shortcuts", "").isNotEmpty()
-        sb.append("<div class=\"grid\">")
         for ((i, e) in sc.withIndex()) {
-            sb.append("<a class=\"tile\" href=\"").append(esc(e.url)).append("\"><div class=\"ic\">").append(icon(ctx, e.url, e.name)).append("</div>").append(esc(e.name.take(12)))
-            if (custom) sb.append("<span class=\"x\" onclick=\"event.preventDefault();location.href='mx://delsc?i=").append(i).append("'\">✕</span>")
+            sb.append("<a class=\"tile\" href=\"").append(esc(e.url)).append("\"><div class=\"ic\">").append(icon(ctx, e.url, e.name)).append("</div><span>").append(esc(e.name.take(13))).append("</span>")
+            if (custom) sb.append("<span class=\"x\" onclick=\"event.preventDefault();location.href='mx://delsc?i=").append(i).append("'\">×</span>")
             sb.append("</a>")
         }
-        sb.append("<a class=\"tile\" href=\"mx://addsc\"><div class=\"ic\" style=\"font-size:24px\">＋</div>إضافة</a></div>")
+        sb.append("<a class=\"tile\" href=\"mx://addsc\"><div class=\"ic\">＋</div><span>إضافة</span></a></div>")
 
+        val st = Storage.compute(ctx)
+        sb.append("<div class=\"strip\"><a href=\"https://mx.home/shield\"><b>").append(db.todayBlocked()).append("</b><span>🛡 محجوب اليوم</span></a>")
+        sb.append("<a href=\"https://mx.home/shield\"><b>").append(db.totalSkipped()).append("</b><span>⚡ انتظار تم تخطيه</span></a>")
+        sb.append("<a href=\"mx://storage\"><b>").append(Storage.fmt(st.total)).append("</b><span>💾 مساحة المتصفح</span></a></div>")
+
+        sb.append("<div class=\"section\"><div class=\"heading\"><i class=\"bar\"></i> GAMING LIBRARY</div><a href=\"mx://addgame\">＋ إضافة لعبة</a></div><div class=\"games\">")
+        for (g in games) {
+            sb.append("<a class=\"game\" href=\"").append(esc(g.url)).append("\"><div class=\"ic\">").append(icon(ctx, g.url, g.name)).append("</div><div style=\"min-width:0;flex:1\"><b>").append(esc(g.name)).append("</b><small>").append(esc(hostOf(g.url))).append("</small></div><span class=\"launch\">↗</span></a>")
+        }
+        sb.append("</div>")
+
+        sb.append("<div class=\"section\"><div class=\"heading\"><i class=\"bar\"></i> GX CONTROL CENTER</div><a href=\"mx://gaming\">فتح لوحة التحكم ↗</a></div>")
+        sb.append("<div class=\"control-grid\"><a class=\"control\" href=\"mx://gaming\"><span class=\"symbol\">⚡</span><span><b>Gaming Mode</b><small>وضع اللعب والأداء</small></span></a>")
+        sb.append("<a class=\"control\" href=\"mx://performance\"><span class=\"symbol\">▥</span><span><b>Performance Lab</b><small>الذاكرة والتبويبات</small></span></a>")
+        sb.append("<a class=\"control\" href=\"https://mx.home/shield\"><span class=\"symbol\">⬡</span><span><b>Security Center</b><small>حالة الدرع والحماية</small></span></a>")
+        sb.append("<a class=\"control\" href=\"mx://tabs\"><span class=\"symbol\">▣</span><span><b>Tab Manager</b><small>إدارة جلسات التصفح</small></span></a></div>")
 
         if (Cfg.bool(Cfg.GXCORNER, true)) {
             GxCorner.ensure(ctx)
             val d = GxCorner.cached(ctx)
-            sb.append("<div class=\"sec\"><b>GX CORNER</b><a href=\"mx://gxrefresh\">تحديث ↻</a></div>")
+            sb.append("<div class=\"section\"><div class=\"heading\"><i class=\"bar\"></i> GX CORNER</div><a href=\"mx://gxrefresh\">تحديث ↻</a></div>")
             sb.append("<div class=\"gx\"><button class=\"on\" onclick=\"gx(0,this)\">الأخبار</button><button onclick=\"gx(1,this)\">الإصدارات</button><button onclick=\"gx(2,this)\">العروض</button></div>")
             val lists = listOf(d?.news, d?.releases, d?.deals)
             for ((idx, list) in lists.withIndex()) {
                 sb.append("<div class=\"gxlist").append(if (idx == 0) " on" else "").append("\" id=\"gl").append(idx).append("\">")
-                if (list.isNullOrEmpty()) sb.append("<div class=\"empty\" style=\"padding:16px\">جاري التحميل… (لازم نت)</div>")
-                else for (e in list.take(8)) {
+                if (list.isNullOrEmpty()) sb.append("<div class=\"empty\">المحتوى سيظهر بعد تحديث GX Corner.</div>")
+                else for (e in list.take(5)) {
                     sb.append("<a class=\"gxc\" href=\"").append(esc(e.url)).append("\">")
                     if (e.img.startsWith("http")) sb.append("<img loading=\"lazy\" src=\"").append(esc(e.img)).append("\">")
                     sb.append("<div><b>").append(esc(e.title)).append("</b>")
@@ -310,25 +327,15 @@ body.opera .empty{color:#fff}
                 sb.append("</div>")
             }
         }
-        val st = Storage.compute(ctx)
-        sb.append("<div class=\"strip\">")
-        sb.append("<a href=\"https://mx.home/shield\"><b>").append(db.todayBlocked()).append("</b><span>🛡 محجوب اليوم</span></a>")
-        sb.append("<a href=\"https://mx.home/shield\"><b>").append(db.totalSkipped()).append("</b><span>⚡ انتظار تم تخطيه</span></a>")
-        sb.append("<a href=\"mx://storage\"><b>").append(Storage.fmt(st.total)).append("</b><span>💾 مساحة التطبيق</span></a></div>")
 
-        sb.append("<div class=\"sec\"><b>الألعاب</b><a href=\"mx://addgame\">＋ إضافة لعبة</a></div><div class=\"games\">")
-        for (g in games) {
-            sb.append("<a class=\"game\" href=\"").append(esc(g.url)).append("\"><div class=\"ic\">").append(icon(ctx, g.url, g.name)).append("</div><div><b>").append(esc(g.name)).append("</b><small>").append(esc(hostOf(g.url))).append("</small></div></a>")
-        }
-        sb.append("</div>")
-
-        sb.append("<div class=\"sec\"><b>الوصول السريع</b><a href=\"https://mx.home/bookmarks\">الكل</a></div>")
+        sb.append("<div class=\"section\"><div class=\"heading\"><i class=\"bar\"></i> PICK UP WHERE YOU LEFT</div><a href=\"https://mx.home/bookmarks\">كل المفضلات</a></div>")
         val list = if (quick.isNotEmpty()) quick.map { Entry(it.title, it.url) } else db.getHistory(5).map { Entry(it.title, it.url) }
-        if (list.isEmpty()) sb.append("<div class=\"empty\" style=\"padding:18px\">لا يوجد شيء بعد</div>")
+        if (list.isEmpty()) sb.append("<div class=\"empty\">مفيش صفحات هنا لسه. افتح موقع وهيظهر هنا.</div>")
         for (e in list) sb.append(item(ctx, e.name, e.url, e.url, null))
 
-        sb.append("<script>function go(){var v=document.getElementById('q').value.trim();if(v){location.href='mx://go?q='+encodeURIComponent(v);}return false;}function gx(i,b){var l=document.querySelectorAll('.gxlist'),k=document.querySelectorAll('.gx button');for(var j=0;j<l.length;j++){l[j].className='gxlist'+(j==i?' on':'');k[j].className=(j==i?'on':'')}}</script>")
-        return page(t, "MaTrIX Co", sb.toString(), if (wall.isEmpty()) "" else "wall" + (if (Cfg.str(Cfg.WALL, "opera") == "opera") " opera" else ""))
+        sb.append("<div style=\"text-align:center;padding:22px 0 4px;color:#747e98;font-size:9px;letter-spacing:2px;font-weight:800\">MATRIX CO • BUILT FOR THE NEXT SESSION</div>")
+        sb.append("<script>function go(){var v=document.getElementById('q').value.trim();if(v){location.href='mx://go?q='+encodeURIComponent(v);}return false;}function gx(i,b){var l=document.querySelectorAll('.gxlist'),k=document.querySelectorAll('.gx button');for(var j=0;j<l.length;j++){l[j].className='gxlist'+(j==i?' on':'');k[j].className=(j==i?'on':'')}}document.getElementById('q').addEventListener('keydown',function(e){if(e.key==='Escape')this.blur()});</script>")
+        return page(t, "MaTrIX Co", sb.toString(), if (wall.isEmpty()) "" else "wall" + (if (Cfg.str(Cfg.WALL, "gx") == "gx") " opera" else ""))
     }
 
     private fun history(ctx: Context, db: ShieldDatabase, t: MxTheme): String {
@@ -355,26 +362,48 @@ body.opera .empty{color:#fff}
 
     private fun shield(ctx: Context, db: ShieldDatabase, t: MxTheme): String {
         val sb = StringBuilder()
-        sb.append("<div class=\"ptop\"><h2>تقرير الدرع</h2><a class=\"btn\" href=\"mx://update\">تحديث القوائم</a></div>")
+        val shieldOn = AdBlocker.enabled()
+        val ironOn = IronGuard.enabled()
+        val fpOn = Cfg.bool(Cfg.FP, true)
+        val safeOn = Cfg.bool(Cfg.SAFEB, true)
+        val active = shieldOn && ironOn && fpOn && safeOn
+        sb.append("<section class=\"security-hero\"><div class=\"state\">MATRIX SECURITY CENTER</div>")
+        sb.append("<h2>").append(if (active) "حمايتك تعمل" else "راجع إعدادات الحماية").append("</h2>")
+        sb.append("<p>لوحة حالة محلية تعرض إعدادات الدرع وسجل الحجب. حالة التشغيل لا تعني ضمانًا مطلقًا ضد كل التهديدات.</p></section>")
+
+        fun status(name: String, detail: String, on: Boolean) {
+            sb.append("<div class=\"status-card\"><b><i class=\"status-dot").append(if (on) "" else " off").append("\"></i>")
+                .append(esc(name)).append("</b><span>").append(esc(if (on) detail else "متوقف — " + detail)).append("</span></div>")
+        }
+        sb.append("<div class=\"status-grid\">")
+        status("Ad & Tracker Shield", "حجب النطاقات والإعلانات والمتتبعات", shieldOn)
+        status("IronGuard", "فحص مخاطر المواقع والروابط", ironOn)
+        status("Anti-Fingerprinting", "تقليل بعض إشارات بصمة المتصفح", fpOn)
+        status("Safe Browsing", "حماية WebView المدعومة من Android", safeOn)
+        sb.append("</div>")
+
+        sb.append("<div class=\"section\"><div class=\"heading\"><i class=\"bar\"></i> PROTECTION ACTIVITY</div><a href=\"mx://update\">تحديث القوائم ↻</a></div>")
+        sb.append("<div class=\"strip\"><a href=\"#activity\"><b>").append(db.todayBlocked()).append("</b><span>محجوب اليوم</span></a>")
+        sb.append("<a href=\"#activity\"><b>").append(db.totalBlocked()).append("</b><span>إجمالي المحجوب</span></a>")
+        sb.append("<a href=\"#activity\"><b>").append(db.totalSkipped()).append("</b><span>انتظار تم تخطيه</span></a></div>")
+
         val week = db.week()
         val maxV = (week.maxOfOrNull { it.second } ?: 0).coerceAtLeast(1)
-        sb.append("<div class=\"card\"><h4>المحجوب خلال آخر 7 أيام</h4><div class=\"bars\">")
-        for (w in week) sb.append("<div style=\"height:").append(((w.second * 100) / maxV).coerceAtLeast(4)).append("%\" title=\"").append(w.first).append("\"></div>")
+        sb.append("<div class=\"card\" id=\"activity\"><h4>نشاط الحجب خلال آخر 7 أيام</h4><div class=\"bars\">")
+        for (w in week) sb.append("<div style=\"height:").append(((w.second * 100) / maxV).coerceAtLeast(4)).append("%\" title=\"").append(esc(w.first)).append(" • ").append(w.second).append("\"></div>")
         sb.append("</div></div>")
-        sb.append("<div class=\"row\"><span>المحجوب (7 أيام)</span><span>").append(week.sumOf { it.second }).append("</span></div>")
-        sb.append("<div class=\"row\"><span>انتظار تم تخطيه (7 أيام)</span><span>").append(week.sumOf { it.third }).append("</span></div>")
-        sb.append("<div class=\"row\"><span>إجمالي المحجوب</span><span>").append(db.totalBlocked()).append("</span></div>")
         sb.append("<div class=\"row\"><span>متتبعات محجوبة</span><span>").append(db.counter("trackers_total")).append("</span></div>")
         sb.append("<div class=\"row\"><span>نطاقات في قاعدة البيانات</span><span>").append(db.blockedHostsCount()).append("</span></div>")
-        sb.append("<div class=\"row\"><span>آخر تحديث</span><span>").append(esc(RuleUpdater.getLastUpdate(ctx) ?: "لم يتم بعد")).append("</span></div>")
+        sb.append("<div class=\"row\"><span>آخر تحديث للقوائم</span><span>").append(esc(RuleUpdater.getLastUpdate(ctx) ?: "لم يتم بعد")).append("</span></div>")
         val msg = RuleUpdater.getLastMessage(ctx)
-        if (!msg.isNullOrBlank()) sb.append("<div class=\"row\"><span>التفاصيل</span><span style=\"max-width:62%;text-align:left;font-size:11px\">").append(esc(msg)).append("</span></div>")
-        sb.append("<div class=\"sec\"><b>أكثر الجهات حجبًا</b></div>")
-        val top = db.getTopBlocked(15)
-        if (top.isEmpty()) sb.append("<div class=\"empty\">لا بيانات بعد</div>")
-        for ((h, c) in top) sb.append("<div class=\"row\"><span style=\"direction:ltr\">").append(esc(h)).append("</span><span>").append(c).append("</span></div>")
-        sb.append("<div style=\"margin-top:14px\"><a class=\"btn alt\" href=\"https://mx.home/spy\">سجل كاشف التجسس</a></div>")
-        return page(t, "الدرع", sb.toString())
+        if (!msg.isNullOrBlank()) sb.append("<div class=\"row\"><span>حالة التحديث</span><span style=\"max-width:62%;text-align:left;font-size:10px\">").append(esc(msg)).append("</span></div>")
+
+        sb.append("<div class=\"section\"><div class=\"heading\"><i class=\"bar\"></i> TOP BLOCKED HOSTS</div><a href=\"https://mx.home/spy\">سجل الرصد</a></div>")
+        val top = db.getTopBlocked(10)
+        if (top.isEmpty()) sb.append("<div class=\"empty\">لا توجد بيانات حجب كافية بعد.</div>")
+        for ((host, count) in top) sb.append("<div class=\"row\"><span style=\"direction:ltr\">").append(esc(host)).append("</span><span>").append(count).append("</span></div>")
+        sb.append("<div style=\"margin-top:14px\"><a class=\"btn alt\" href=\"https://mx.home/spy\">فتح سجل كاشف التجسس</a></div>")
+        return page(t, "Security Center", sb.toString())
     }
 
     private fun spyLog(ctx: Context, db: ShieldDatabase, t: MxTheme): String {

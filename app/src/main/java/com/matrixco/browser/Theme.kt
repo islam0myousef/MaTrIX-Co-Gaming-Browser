@@ -2,7 +2,6 @@ package com.matrixco.browser
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 
@@ -18,7 +17,7 @@ object Themes {
     private val midnight = MxTheme("midnight", "Midnight", c(31, 33, 40), c(43, 46, 55), c(54, 58, 68), c(96, 140, 240), c(160, 190, 250), Color.WHITE, c(168, 172, 184), false)
     private val light = MxTheme("classic", "Light", c(244, 245, 248), Color.WHITE, c(230, 232, 238), c(50, 100, 220), c(70, 110, 200), c(24, 26, 32), c(100, 106, 120), true)
 
-    private val gxClassic = MxTheme("gxclassic", "GX Classic", c(9, 9, 12), c(21, 21, 26), c(36, 36, 44), c(250, 30, 78), c(255, 120, 150), Color.WHITE, c(160, 160, 172), false)
+    private val gxClassic = MxTheme("gxclassic", "MaTrIX GX Neon", c(9, 10, 16), c(18, 21, 32), c(28, 33, 48), c(151, 92, 255), c(210, 255, 78), Color.WHITE, c(157, 166, 190), false)
     private val whiteWolf = MxTheme("whitewolf", "White Wolf", c(236, 238, 243), Color.WHITE, c(224, 227, 234), c(250, 30, 78), c(200, 40, 90), c(18, 18, 24), c(100, 104, 118), true)
 
     val all: List<MxTheme> = listOf(
@@ -38,15 +37,14 @@ object Themes {
         light
     )
 
-    /** "تلقائي": يتبع وضع الجهاز (فاتح/داكن) */
-    val auto: MxTheme = midnight.copy(id = "auto", name = "Auto")
-    val picker: List<MxTheme> = listOf(auto) + all
+    /** GX default theme: keeps the browser identity consistent across Android light/dark modes. */
+    val auto: MxTheme = gxClassic.copy(id = "auto", name = "GX Auto")
+    val picker: List<MxTheme> = listOf(auto) + all.filter { it.id != gxClassic.id }
 
     fun resolve(ctx: Context, id: String?): MxTheme {
-        val base: MxTheme = if (id == null || id == "auto") {
-            val night = (ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-            if (night) gxClassic else whiteWolf
-        } else all.firstOrNull { it.id == id } ?: gxClassic
+        // GX identity is intentionally dark regardless of the Android system theme.
+        // Users can still select the explicit Light theme from Appearance settings.
+        val base: MxTheme = if (id == null || id == "auto") gxClassic else all.firstOrNull { it.id == id } ?: gxClassic
         val ov = Cfg.int(Cfg.ACCENT, 0)
         return if (ov != 0) base.copy(accent = ov, accent2 = Color.rgb(
             minOf(255, Color.red(ov) + 70), minOf(255, Color.green(ov) + 70), minOf(255, Color.blue(ov) + 70))) else base
@@ -131,4 +129,6 @@ object Cfg {
     const val GXCORNER = "show_gxcorner"
     const val RAMLIM = "ram_limiter"
     const val TABSLEEP = "tab_sleep_min"
+    const val GX_PROFILE = "gx_profile"
+    const val GX_MOTION = "gx_motion"
 }

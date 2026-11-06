@@ -1,53 +1,54 @@
 plugins {
-id("com.android.application")
-id("org.jetbrains.kotlin.android")
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
 }
 
 android {
-namespace = "com.matrixco.browser"
-compileSdk = 35
+    namespace = "com.matrixco.browser"
+    compileSdk = 35
 
-defaultConfig {
-    applicationId = "com.matrixco.browser"
-    minSdk = 23
-    targetSdk = 28
-    versionCode = 18
-    versionName = "3.9.0"
-}
+    defaultConfig {
+        applicationId = "com.matrixco.browser"
+        minSdk = 23
+        targetSdk = 28
+        versionCode = 400
+        versionName = "4.0.0"
+    }
 
-signingConfigs {
-    create("release") {
-        val ks = System.getenv("MX_KEYSTORE")
-        if (!ks.isNullOrEmpty() && file(ks).exists()) {
-            storeFile = file(ks)
-            storePassword = System.getenv("MX_STORE_PASS")
-            keyAlias = System.getenv("MX_KEY_ALIAS")
-            keyPassword = System.getenv("MX_KEY_PASS")
+    signingConfigs {
+        create("release") {
+            val keyStorePath = System.getenv("MX_KEYSTORE")
+            if (!keyStorePath.isNullOrBlank()) {
+                storeFile = file(keyStorePath)
+                storePassword = System.getenv("MX_STORE_PASS").orEmpty()
+                keyAlias = System.getenv("MX_KEY_ALIAS").orEmpty()
+                keyPassword = System.getenv("MX_KEY_PASS").orEmpty()
+            }
         }
     }
-}
 
-buildTypes {
-    release {
-        isMinifyEnabled = false
-        if (!System.getenv("MX_KEYSTORE").isNullOrEmpty()) signingConfig = signingConfigs.getByName("release")
+    buildTypes {
+        debug {
+            versionNameSuffix = "-dev"
+        }
+        release {
+            if (!System.getenv("MX_KEYSTORE").isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+            isMinifyEnabled = false
+            isShrinkResources = false
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
     }
-}
 
-lint {
-    checkReleaseBuilds = false
-    abortOnError = false
-}
-
-compileOptions {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
-
-kotlinOptions {
-    jvmTarget = "17"
-}
-
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = "17" }
+    packaging {
+        resources.excludes += setOf("META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*")
+    }
 }
 
 dependencies {

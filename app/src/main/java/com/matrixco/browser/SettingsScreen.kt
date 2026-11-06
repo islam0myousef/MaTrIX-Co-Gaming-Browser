@@ -142,7 +142,8 @@ class SettingsScreen(
         section(col, "GX")
         card(col, listOf(
             nav("palette", "GX Mods", "خلفيات متحركة، ألوان تمييز، أصوات") { push("gxmods") },
-            nav("bolt", "GX Control", "الذاكرة وتنويم التبويبات") { push("gxcontrol") }
+            nav("bolt", "GX Control", "الذاكرة وتنويم التبويبات") { push("gxcontrol") },
+            action("bolt", "Performance Lab", "قياس RAM وPSS وحالة التبويبات مباشرة") { close(); a.openPerformanceLab() }
         ))
         section(col, "الميزات")
         card(col, listOf(
@@ -509,7 +510,7 @@ class SettingsScreen(
         val rows = ArrayList<View>()
         for (th in Themes.picker) {
             val dot = TextView(a).apply { background = Ui.oval(th.accent) }
-            val r = rowBase(null, if (th.id == "auto") "تلقائي (يتبع وضع الجهاز)" else th.name, null, if (th.id == cur) icon("check", theme.accent, 20) else null) { a.applyTheme(th.id) }
+            val r = rowBase(null, if (th.id == "auto") "GX Neon (الافتراضي)" else th.name, null, if (th.id == cur) icon("check", theme.accent, 20) else null) { a.applyTheme(th.id) }
             (r as LinearLayout).addView(dot, 0, LinearLayout.LayoutParams(dp(16), dp(16)).apply { marginEnd = dp(14) })
             rows.add(r)
         }
@@ -530,6 +531,7 @@ class SettingsScreen(
         card(col, listOf(50, 100, 150, 300).map { mb -> radio("$mb MB", mb == cur) { Cfg.setInt(Cfg.CACHE_MB, mb); render() } })
         section(col, "أدوات")
         card(col, listOf(
+            action("bolt", "فتح Performance Lab", "قياسات مباشرة لاستهلاك التطبيق والذاكرة") { close(); a.openPerformanceLab() },
             action("trash", "تنظيف الكاش الآن") { a.cleanCacheNow(a.currentTab()) },
             action("t:📴", "الصفحات المحفوظة") { close(); a.openInternalPage("/offline") },
             toggle("t:🖼", "توفير الباقة (بدون صور)", null, Cfg.DATASAVER, false) { a.applyDataSaver(it) }
@@ -538,7 +540,7 @@ class SettingsScreen(
 
     private fun games(col: LinearLayout) {
         card(col, listOf(
-            toggle("game", "عدّاد FPS وPing", "داخل وضع اللعب", Cfg.FPS, true),
+            toggle("game", "عدّاد FPS وTCP", "معدل الإطارات ووقت اتصال TCP للمضيف", Cfg.FPS, true),
             toggle("bolt", "الزر العائم", "أدوات سريعة فوق الصفحة", Cfg.SHOWFAB, true) { a.applyFabVisibility(it) }
         ))
     }
@@ -555,8 +557,8 @@ class SettingsScreen(
 
     private fun gxmods(col: LinearLayout) {
         section(col, "خلفية الصفحة الرئيسية")
-        val cw = Cfg.str(Cfg.WALL, "none")
-        val opts = listOf("none" to "بدون", "grid" to "Neon Grid (متحركة)", "embers" to "Embers — جمرات (متحركة)", "matrix" to "Matrix (متحركة)", "aurora" to "Aurora — تدرّج متحرك", "custom" to "صورة من المعرض")
+        val cw = Cfg.str(Cfg.WALL, "gx")
+        val opts = listOf("gx" to "MaTrIX GX Neon (الافتراضية)", "none" to "بدون", "grid" to "Neon Grid (متحركة)", "embers" to "Embers — جمرات (متحركة)", "matrix" to "Matrix (متحركة)", "aurora" to "Aurora — تدرّج متحرك", "custom" to "صورة من المعرض")
         card(col, opts.map { (k, name) ->
             radio(name, k == cw, if (k == "custom") "اختار صورة من جهازك" else null) {
                 if (k == "custom") a.pickWallpaper() else { Cfg.setStr(Cfg.WALL, k); a.reloadHomeIfShown(); render() }
@@ -589,7 +591,7 @@ class SettingsScreen(
     private fun gxcontrol(col: LinearLayout) {
         card(col, listOf(
             toggle("storage", "محدِّد الذاكرة (RAM Limiter)", "ينوّم التبويبات الخلفية لما المتاح من RAM يقل عن 15%", Cfg.RAMLIM, false),
-            toggle("bolt", "عدّاد FPS وPing", "داخل وضع اللعب", Cfg.FPS, true)
+            toggle("bolt", "عدّاد FPS وTCP", "داخل وضع اللعب", Cfg.FPS, true)
         ))
         section(col, "تنويم التبويبات الخاملة بعد")
         val cur = Cfg.int(Cfg.TABSLEEP, 10)
