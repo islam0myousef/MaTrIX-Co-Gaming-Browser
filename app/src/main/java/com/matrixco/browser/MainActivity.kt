@@ -289,6 +289,9 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        // The crash-recovery screen can be shown before UiKit is initialized.
+        // Do not touch lazy UI delegates (UpdateUi/PinLock) until onCreate has built the browser UI.
+        if (!::ui.isInitialized) return
         if (!updChecked) { updChecked = true; h.postDelayed({ updateUi.checkAuto() }, 4000); h.postDelayed({ maybeAskDefaultBrowser() }, 7000) }
         stopService(Intent(this, AudioService::class.java))
         cur?.web?.onResume()
@@ -326,7 +329,7 @@ class MainActivity : Activity() {
             CookieManager.getInstance().removeAllCookies(null)
             WebStorage.getInstance().deleteAllData()
             cur?.web?.clearCache(true)
-            io.execute { db.clearHistory() }
+            if (::db.isInitialized) io.execute { db.clearHistory() }
         }
         for (t in tabs) { try { t.web.stopLoading(); t.web.destroy() } catch (_: Exception) {} }
         tabs.clear()

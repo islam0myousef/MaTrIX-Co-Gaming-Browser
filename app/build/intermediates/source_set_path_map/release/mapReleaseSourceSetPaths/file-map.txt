@@ -1,0 +1,10 @@
+com.matrixco.browser.app-webkit-1.12.1-0 /data/data/com.itsaky.androidide/files/home/.gradle/caches/8.9/transforms/1d36d9e5e957292c8b706821bfb09eaa/transformed/webkit-1.12.1/res
+com.matrixco.browser.app-core-1.1.0-1 /data/data/com.itsaky.androidide/files/home/.gradle/caches/8.9/transforms/6fd3d54771a3b6be3d711b75afaad4ae/transformed/core-1.1.0/res
+com.matrixco.browser.app-annotation-experimental-1.4.1-2 /data/data/com.itsaky.androidide/files/home/.gradle/caches/8.9/transforms/7ad2e1228cf93c43be30a655159cf03e/transformed/annotation-experimental-1.4.1/res
+com.matrixco.browser.app-pngs-3 /data/data/com.itsaky.androidide/files/home/repo/app/build/generated/res/pngs/release
+com.matrixco.browser.app-resValues-4 /data/data/com.itsaky.androidide/files/home/repo/app/build/generated/res/resValues/release
+com.matrixco.browser.app-packageReleaseResources-5 /data/data/com.itsaky.androidide/files/home/repo/app/build/intermediates/incremental/release/packageReleaseResources/merged.dir
+com.matrixco.browser.app-packageReleaseResources-6 /data/data/com.itsaky.androidide/files/home/repo/app/build/intermediates/incremental/release/packageReleaseResources/stripped.dir
+com.matrixco.browser.app-release-7 /data/data/com.itsaky.androidide/files/home/repo/app/build/intermediates/merged_res/release/mergeReleaseResources
+com.matrixco.browser.app-main-8 /data/data/com.itsaky.androidide/files/home/repo/app/src/main/res
+com.matrixco.browser.app-release-9 /data/data/com.itsaky.androidide/files/home/repo/app/src/release/res

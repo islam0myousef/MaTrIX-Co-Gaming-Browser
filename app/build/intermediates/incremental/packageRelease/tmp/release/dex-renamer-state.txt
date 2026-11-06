@@ -1,0 +1,7 @@
+#Fri Nov 06 16:51:48 GMT 2026
+base.0=/data/data/com.itsaky.androidide/files/home/repo/app/build/intermediates/dex/release/mergeDexRelease/classes.dex
+base.1=/data/data/com.itsaky.androidide/files/home/repo/app/build/intermediates/global_synthetics_dex/release/mergeReleaseGlobalSynthetics/classes.dex
+path.0=classes.dex
+path.1=classes.dex
+renamed.0=classes.dex
+renamed.1=classes2.dex
