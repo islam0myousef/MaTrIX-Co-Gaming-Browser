@@ -2792,7 +2792,7 @@ class MainActivity : Activity() {
                     val n = countOf(true)
                     if (n > 0) b.addView(TextView(this).apply {
                         text = n.toString(); textSize = 9f; setTextColor(bgC()); gravity = Gravity.CENTER; typeface = Typeface.DEFAULT_BOLD
-                        background = Ui.round(if (priv) pAcc else Color.rgb(176, 130, 255), dp(8).toFloat())
+                        background = Ui.round(if (priv) privateAccent else Color.rgb(176, 130, 255), dp(8).toFloat())
                         setPadding(dp(4), 0, dp(4), 0)
                     }, FrameLayout.LayoutParams(WRAP, dp(14), Gravity.TOP or Gravity.RIGHT).apply { setMargins(0, dp(3), dp(6), 0) })
                 } else {
@@ -2854,7 +2854,7 @@ class MainActivity : Activity() {
             if (priv && query.isEmpty()) {
                 val info = LinearLayout(this).apply {
                     orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(16), dp(18), dp(16))
-                    background = Ui.round(pCard, dp(18).toFloat())
+                    background = Ui.round(privateCard, dp(18).toFloat())
                 }
                 info.addView(TextView(this).apply { text = "عن التصفح الخاص"; textSize = 14f; setTextColor(Color.WHITE); typeface = Typeface.DEFAULT_BOLD })
                 val lines = listOf(
