@@ -130,3 +130,11 @@ chmod +x gradlew
 - `toDataURL` and `toBlob` perturb a temporary copy only; the original page canvas is not modified.
 - `getImageData` remains unmodified for connected canvases to reduce the risk of affecting game rendering and page logic.
 - This is a targeted compatibility/privacy improvement, not a claim of complete fingerprint protection. Verify exported PNG validity and repeatability on-device.
+
+
+## v4.3.3 — Canvas pipeline and injection diagnostics
+- Canvas `getImageData()` protection now covers small connected and detached canvases. It mutates only the returned ImageData buffer, not the source canvas pixels.
+- `toDataURL()` and `toBlob()` continue to export a deterministic, perturbed temporary copy for small canvases.
+- The hardening layer exposes `window.__mxH` and `window.__mxCanvasProtection` version markers for runtime diagnostics.
+- Document-start registration now exposes `window.__mxDocumentStart` and logs whether the WebView supports true document-start injection.
+- Runtime fallback installs hardening before the main script layer. This fallback is still late relative to page scripts; true first-script protection requires DOCUMENT_START_SCRIPT support.

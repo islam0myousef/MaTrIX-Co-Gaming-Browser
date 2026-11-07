@@ -108,3 +108,11 @@ Keep a backup before installing over an existing version. Android only permits i
 - Export protection works on a temporary canvas copy, leaving the original page canvas unchanged.
 - Connected-canvas `getImageData` remains untouched for compatibility; this leaves a possible fingerprinting path that requires separate testing.
 - JavaScript syntax and ZIP integrity checks are required; Android Gradle build and BrowserLeaks device validation are pending.
+
+
+## v4.3.3 — Canvas pipeline and injection diagnostics
+- Expanded deterministic `getImageData()` perturbation to small connected and detached canvases; only the returned ImageData is changed.
+- Retained temporary-copy export mutation for `toDataURL()` / `toBlob()`.
+- Reordered runtime fallback so hardening is evaluated before MAIN.
+- Added `__mxH`, `__mxCanvasProtection`, and `__mxDocumentStart` diagnostic markers and explicit log output when document-start injection is unavailable.
+- Pending: Android release build, device validation, BrowserLeaks signature change, valid image rendering, and repeatability tests. No claim of successful APK build.

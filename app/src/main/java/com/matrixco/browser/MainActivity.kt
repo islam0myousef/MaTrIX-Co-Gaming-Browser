@@ -885,11 +885,16 @@ class MainActivity : Activity() {
         // Native shouldInterceptRequest remains the enforcement point for network filtering.
         try {
             if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)) {
-                // Install timer virtualization independently from fingerprint protection.
+                // This marker is intentionally separate: it proves the page received
+                // a script before its own JavaScript, rather than via late fallback.
+                androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, "window.__mxDocumentStart=1;", setOf("*"))
                 androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, Scripts.TIMER_ENGINE, setOf("*"))
                 if (Cfg.bool(Cfg.FP, true)) {
                     androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, Scripts.harden(tab.privacySeed), setOf("*"))
                 }
+                Log.i("MaTRIX.Inject", "Document-start injection registered; fingerprint protection=${Cfg.bool(Cfg.FP, true)}")
+            } else {
+                Log.e("MaTRIX.Inject", "DOCUMENT_START_SCRIPT unavailable; early-page fingerprint protection cannot be guaranteed")
             }
         } catch (error: Throwable) {
             Log.w("MaTRIX.Inject", "Document-start script registration failed; runtime fallback will be used", error)
@@ -1027,10 +1032,12 @@ class MainActivity : Activity() {
         // Idempotent fallback for WebView providers without DOCUMENT_START_SCRIPT.
         // When document-start is available this call is a no-op due to __mxTimer.
         tab.web.evaluateJavascript(Scripts.TIMER_ENGINE, null)
+        // On providers without document-start support this is still a late fallback,
+        // but install it before MAIN so later wrappers cannot capture unprotected APIs.
+        if (Cfg.bool(Cfg.FP, true)) tab.web.evaluateJavascript(Scripts.harden(tab.privacySeed), null)
         tab.web.evaluateJavascript(
             Scripts.main(host, tab.skipMode, Cfg.bool(Cfg.DARK, false), yt, on && AdBlocker.adsOn(), on && AdBlocker.annoyOn(), spy, Cfg.bool(Cfg.FP, true), Cfg.bool(Cfg.BGAUDIO, false), pol), null
         )
-        if (Cfg.bool(Cfg.FP, true)) tab.web.evaluateJavascript(Scripts.harden(tab.privacySeed), null)
         if (tab.desktop) tab.web.evaluateJavascript(Scripts.desktopViewport(desktopWidth()), null)
         if (on) {
             io.execute {

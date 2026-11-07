@@ -543,7 +543,7 @@ if(mode!==0) startScan(); else { sc=oSI(function(){ if(ANNOY&&++ticks<70) unwall
     val HARDEN = """
 (function(){
 if(window.__mxH) return;
-try{ Object.defineProperty(window,'__mxH',{value:1}); }catch(e){}
+try{ Object.defineProperty(window,'__mxH',{value:'4.3.3',configurable:false}); }catch(e){ window.__mxH='4.3.3'; }
 var W=window, N=navigator;
 function def(o,k,v){ try{ Object.defineProperty(o,k,{get:function(){return v;},configurable:true}); }catch(e){} }
 function kill(o,k){ try{ Object.defineProperty(o,k,{value:undefined,configurable:true,writable:true}); }catch(e){ try{ o[k]=undefined; }catch(e2){} } }
@@ -640,7 +640,10 @@ try{
   CX.getImageData=function(x,y,w,h){
     var r=oGI.apply(this,arguments);
     try{
-      if(!this.canvas.isConnected && smallCanvas(this.canvas) && r && r.data)
+      /* getImageData returns a detached pixel buffer. Mutating this buffer
+         does not repaint or alter the source canvas. Cover connected and
+         detached small canvases so DOM attachment cannot bypass protection. */
+      if(smallCanvas(this.canvas) && r && r.data)
         jitter(r.data,r.width,r.height);
     }catch(e){}
     return r;
@@ -663,6 +666,9 @@ try{
   CP.toBlob=function(){
     return oTB.apply(noisy(this),arguments);
   };
+  try{
+    Object.defineProperty(W,'__mxCanvasProtection',{value:'4.3.3',configurable:false});
+  }catch(e){ W.__mxCanvasProtection='4.3.3'; }
 }catch(e){}
 
 /* 7) Audio fingerprinting: deterministic, tiny noise on analyser output only.
