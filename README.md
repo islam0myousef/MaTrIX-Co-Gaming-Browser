@@ -154,3 +154,11 @@ chmod +x gradlew
 - Added Glide 4.16.0 for GIF decoding and lifecycle cleanup when the dialog closes.
 - Added resumable APK downloads using HTTP Range / If-Range validators, a persistent `.part` file, and ETag/Last-Modified metadata.
 - Resume depends on server byte-range support; if the host ignores Range or changes the file, the updater safely restarts rather than appending invalid bytes.
+
+
+## v4.5.1 — WebView Audit & Baseline (diagnostic-only)
+- Extends Performance Lab with read-only WebView provider/version and Android runtime diagnostics.
+- Reports runtime support for DOCUMENT_START_SCRIPT, SAFE_BROWSING and WEB_MESSAGE_LISTENER.
+- Probes the currently active page for MaTRIX injection markers and availability of Canvas, WebGL, WebGL2, OffscreenCanvas and Audio APIs.
+- Adds copy-to-clipboard for the diagnostic report.
+- This build does not change Canvas/WebGL protection policy, WebView security settings, or page behavior.

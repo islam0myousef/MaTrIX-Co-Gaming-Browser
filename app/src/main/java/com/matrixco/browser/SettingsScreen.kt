@@ -143,7 +143,7 @@ class SettingsScreen(
         card(col, listOf(
             nav("palette", "GX Mods", "خلفيات متحركة، ألوان تمييز، أصوات") { push("gxmods") },
             nav("bolt", "GX Control", "الذاكرة وتنويم التبويبات") { push("gxcontrol") },
-            action("bolt", "Performance Lab", "قياس RAM وPSS وحالة التبويبات مباشرة") { close(); a.openPerformanceLab() }
+            action("bolt", "Performance & WebView Diagnostics", "قياس الأداء وفحص محرك WebView") { close(); a.openPerformanceLab() }
         ))
         section(col, "الميزات")
         card(col, listOf(

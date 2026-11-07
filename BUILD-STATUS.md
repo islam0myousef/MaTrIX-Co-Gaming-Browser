@@ -134,3 +134,11 @@ Keep a backup before installing over an existing version. Android only permits i
 - `app/src/main/res/drawable-nodpi/matrix_dragon.gif`: user-supplied 498×280, 59-frame dragon animation.
 - `app/build.gradle.kts`: version 4.5.0 / code 450 and Glide 4.16.0.
 - Not yet built or device-tested. Resume depends on the release server supporting byte ranges and stable validators.
+
+
+## v4.5.1 changes (2026-11-07)
+- Diagnostic-only build based on 4.5.0.
+- Performance Lab now reports Android version/device, installed WebView provider and version, AndroidX WebKit feature support, current-tab injection markers, and available browser APIs.
+- Added copyable diagnostic report.
+- No privacy, Canvas, WebGL, networking, or WebView security behavior was intentionally changed.
+- Not built or device-tested in this environment.
