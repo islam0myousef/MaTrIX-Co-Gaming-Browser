@@ -1,4 +1,4 @@
-# MaTRIX Co — Gaming Browser 4.1.2
+# MaTRIX Co — Gaming Browser 4.1.3
 
 متصفح Android مبني على WebView مع واجهة GX داكنة، إدارة تبويبات، أدوات ألعاب، وحماية تصفح.
 
@@ -15,6 +15,15 @@ chmod +x gradlew
 
 لإصدار Release: `./gradlew assembleRelease`. يتم توقيعه تلقائيًا عند توفير المتغيرات `MX_KEYSTORE`, `MX_STORE_PASS`, `MX_KEY_ALIAS`, `MX_KEY_PASS`؛ وإذا لم تتوفر ينتج APK غير موقّع.
 
+## 4.1.3 — JavaScript Bridge Security
+
+- إزالة `addJavascriptInterface` وواجهة `__mxb` بالكامل؛ لم تعد صفحات الويب أو الإطارات التابعة لها تمتلك نقطة دخول JavaScript إلى كود Android.
+- إزالة `@JavascriptInterface` و`ShieldBridge` بعد التأكد أن دالة الجسر كانت مستخدمة فقط لفحص طلبات الشبكة.
+- الإبقاء على فحص وحجب الطلبات في `WebViewClient.shouldInterceptRequest`، بما يشمل موارد الصفحة وطلبات `fetch` و`XMLHttpRequest` التي تمر عبر طبقة تحميل WebView.
+- إزالة أغلفة JavaScript القديمة لـ fetch/XHR/Beacon التي كانت تعتمد على الجسر، لتجنب إيهام الصفحة بأن هناك فحصًا إضافيًا غير موجود.
+- الإبقاء على إدارة النوافذ المنبثقة مشروطة بإيماءة مستخدم، وعلى رفض أذونات الكاميرا والميكروفون والموقع تلقائيًا.
+- تحديث الإصدار إلى `4.1.3` ورقم البناء `413`.
+
 ## 4.1.2 — Isolated Timer Engine
 
 - فصل محرك تسريع المؤقتات عن سكريبتات الحماية من البصمة.
@@ -29,7 +38,7 @@ chmod +x gradlew
 
 - استبدال WebView المتعطل عند خروج Renderer بدل إغلاق التبويب.
 - محاولة استعادة آخر عنوان قابل للتصفح، مع تأجيل استعادة التبويبات الخلفية حتى اختيارها.
-- الحفاظ على إعدادات WebView والجسر والعميل عبر إعادة استخدام مسار `configure`.
+- الحفاظ على إعدادات WebView والعميل عبر إعادة استخدام مسار `configure`؛ تمت إزالة جسر JavaScript لاحقًا في 4.1.3.
 - ترقية رقم الإصدار إلى `4.1.1` ورقم البناء `411`.
 
 ## 4.1.0 — Core Stability (initial maintenance release)\n\n- ترقية AudioService إلى Foreground Service مبكرًا من `onCreate()` لتفادي انتهاء مهلة بدء الخدمة قبل استدعاء `startForeground()`.\n- إضافة قناة إشعارات ثابتة وإشعار تشغيل منخفض الأهمية، مع تحديد نوع الخدمة `mediaPlayback` على Android 10 وما بعده.\n- إيقاف الخدمة بأمان عند فشل الترقية إلى Foreground بدل ترك خدمة بدأت دون حالة Foreground.\n- تسجيل فشل بدء خدمة الصوت في Logcat، وإيقاف معالجة WebView مؤقتًا كمسار احتياطي عند فشل تشغيل الخدمة.\n- توحيد رقم الإصدار إلى `4.1.0` ورقم البناء `410` مع الحفاظ على `applicationId`.\n\n## 4.0.0 — GX Rebuild

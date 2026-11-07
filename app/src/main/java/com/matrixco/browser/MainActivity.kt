@@ -47,7 +47,6 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
-import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.SslErrorHandler
 import android.webkit.URLUtil
@@ -884,7 +883,8 @@ class MainActivity : Activity() {
         CookieManager.getInstance().setAcceptThirdPartyCookies(w, Cfg.bool(Cfg.TPCOOK, false))
         w.setBackgroundColor(theme.bg)
         w.overScrollMode = View.OVER_SCROLL_NEVER
-        w.addJavascriptInterface(ShieldBridge(tab), "__mxb")
+        // No JavaScript interfaces are exposed to web content.
+        // Native shouldInterceptRequest remains the enforcement point for network filtering.
         try {
             if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)) {
                 // Install timer virtualization independently from fingerprint protection.
@@ -903,18 +903,6 @@ class MainActivity : Activity() {
         w.setFindListener { active, total, done -> if (done) findCount.text = if (total == 0) "0" else "${active + 1}/$total" }
     }
 
-    /** جسر صغير: الصفحة تسأل هل الرابط محجوب؟ (يرجع true/false فقط) */
-    private inner class ShieldBridge(val tab: Tab) {
-        @JavascriptInterface
-        fun blocked(url: String?): Boolean {
-            if (url.isNullOrEmpty()) return false
-            return try {
-                val uri = Uri.parse(url)
-                val cat = AdBlocker.check(uri, tab.host, false)
-                if (cat != 0) { tab.blocked.incrementAndGet(); AdBlocker.noteBlocked(uri.host, cat); true } else false
-            } catch (_: Exception) { false }
-        }
-    }
 
     private fun offlineDir() = File(filesDir, "offline")
     private fun isOfflineFile(uri: Uri): Boolean = try { File(uri.path ?: "").canonicalPath.startsWith(offlineDir().canonicalPath) } catch (_: Exception) { false }

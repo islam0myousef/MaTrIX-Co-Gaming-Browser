@@ -196,45 +196,8 @@ var realNow=(TIMER&&TIMER.realNow)?TIMER.realNow:function(){ return OD.now(); };
 /* The timer virtualization engine is installed independently at document start.
    This module only controls its speed; fingerprint settings never affect it. */
 
-/* ===== قطع طلبات fetch/XHR/Beacon للنطاقات المحجوبة (يظهر كفشل شبكة حقيقي) ===== */
-var MB=W.__mxb;
-function blk(u){
-  try{
-    if(!MB) return false;
-    var a=new URL(String(u),location.href);
-    if(a.protocol!=='http:'&&a.protocol!=='https:') return false;
-    if(a.hostname===location.hostname) return false;
-    return MB.blocked(a.href)===true;
-  }catch(e){ return false; }
-}
-try{
-  var oF=W.fetch;
-  if(oF){
-    W.fetch=function(i){
-      var u=(typeof i==='string')?i:((i&&i.url)?i.url:String(i));
-      if(blk(u)) return Promise.reject(new TypeError('Failed to fetch'));
-      return oF.apply(this,arguments);
-    };
-  }
-}catch(e){}
-try{
-  var XP=W.XMLHttpRequest.prototype, oXo=XP.open, oXs=XP.send;
-  XP.open=function(m,u){ this.__mxu=u; return oXo.apply(this,arguments); };
-  XP.send=function(){
-    var x=this;
-    if(x.__mxu&&blk(x.__mxu)){
-      oST(function(){
-        try{ x.dispatchEvent(new Event('error')); x.dispatchEvent(new Event('loadend')); }catch(e){}
-      },0);
-      return;
-    }
-    return oXs.apply(this,arguments);
-  };
-}catch(e){}
-try{
-  var oB=W.navigator.sendBeacon;
-  if(oB) W.navigator.sendBeacon=function(u){ if(blk(u)) return false; return oB.apply(this,arguments); };
-}catch(e){}
+/* Network filtering is enforced natively by WebViewClient.shouldInterceptRequest.
+   No JavaScript-to-native bridge is exposed to untrusted pages. */
 
 function setF(nf){
   if(TIMER&&TIMER.setSpeed) TIMER.setSpeed(nf);
