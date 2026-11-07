@@ -4,6 +4,11 @@ plugins {
 }
 
 android {
+    buildFeatures {
+        // AGP 8+ disables BuildConfig generation by default.
+        buildConfig = true
+    }
+
     namespace = "com.matrixco.browser"
     compileSdk = 35
 
@@ -11,8 +16,8 @@ android {
         applicationId = "com.matrixco.browser"
         minSdk = 23
         targetSdk = 28
-        versionCode = 420
-        versionName = "4.2.0"
+        versionCode = 421
+        versionName = "4.2.1"
     }
 
     signingConfigs {

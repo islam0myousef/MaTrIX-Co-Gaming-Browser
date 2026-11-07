@@ -101,3 +101,9 @@ chmod +x gradlew
 - Accept downloads only from valid HTTP(S) URLs without embedded user-info credentials.
 - Sanitize downloaded filenames against path separators, control characters, and reserved filename characters.
 - Send a Referer only for same-origin downloads, reduced to the origin root to avoid leaking page paths and query strings.
+
+
+## v4.2.1 — BuildConfig Generation Fix
+- Explicitly enable Android BuildConfig generation for AGP 8+.
+- Fixes `Unresolved reference: BuildConfig` in `MxApp.kt`.
+- No runtime behavior or security policy changes.

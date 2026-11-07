@@ -80,3 +80,9 @@ Keep a backup before installing over an existing version. Android only permits i
 - Download URLs are restricted to HTTP(S), reject embedded credentials, and filenames are sanitized before storage.
 - Download Referer is limited to same-origin and origin-root only.
 - Static checks performed during packaging; Android Gradle build and device runtime tests are not claimed unless run separately.
+
+
+## v4.2.1 — BuildConfig Generation Fix
+- Enabled `android.buildFeatures.buildConfig = true` for AGP 8+.
+- Fixes Kotlin compilation reference in `MxApp.kt`.
+- Gradle build not executed in packaging environment; run `./gradlew assembleRelease` to verify.
