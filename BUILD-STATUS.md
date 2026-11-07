@@ -1,4 +1,19 @@
-# Build and verification status — MaTRIX Co 4.1.3
+# Build and verification status — MaTRIX Co 4.2.0
+
+## 4.2.0 Privacy, Security & Gaming Consolidation
+- Version: `4.2.0`; `versionCode = 420`.
+- Canvas perturbation now uses a per-document seed and deterministic pixel selection, so repeated reads within the same page receive consistent changes.
+- Audio readout perturbation uses stable per-document offsets instead of fresh random offsets on every read.
+- Removed hardcoded 412×915 screen spoofing; actual screen geometry and color depth remain available for layout/game compatibility.
+- WebView remote debugging is enabled only for debug builds (`BuildConfig.DEBUG`) and disabled for release builds.
+- Retained native request filtering, JavaScript-bridge removal, third-party-cookie preference, mixed-content restrictions, Safe Browsing preference, external-scheme controls, sanitized downloads, renderer recovery, game-mode renderer priority, and sleeping background tabs.
+- Corrected a duplicate insecure-HTTP fallback toast.
+
+## 4.2.0 verification
+- `Scripts.TIMER_ENGINE`, `Scripts.MAIN` (after placeholder substitution), and `Scripts.HARDEN` pass `node --check`.
+- `AndroidManifest.xml` parses successfully.
+- Android Gradle build was attempted; it stopped before compilation because this environment could not resolve `services.gradle.org` (`UnknownHostException`). No APK build success is claimed.
+- Physical-device WebView tests remain outstanding.
 
 ## 4.1.3 JavaScript bridge security
 - Version is now `4.1.3` / `versionCode = 413`.

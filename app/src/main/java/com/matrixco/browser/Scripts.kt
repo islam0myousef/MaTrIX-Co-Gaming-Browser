@@ -552,18 +552,20 @@ try{ Object.defineProperty(window,'__mxH',{value:1}); }catch(e){}
 var W=window, N=navigator;
 function def(o,k,v){ try{ Object.defineProperty(o,k,{get:function(){return v;},configurable:true}); }catch(e){} }
 function kill(o,k){ try{ Object.defineProperty(o,k,{value:undefined,configurable:true,writable:true}); }catch(e){ try{ o[k]=undefined; }catch(e2){} } }
-var rnd=function(n){ return (Math.random()*n)|0; };
+var seed=0;
+try{ var seedBytes=new Uint32Array(1); W.crypto.getRandomValues(seedBytes); seed=seedBytes[0]>>>0; }catch(e){ seed=(NativeSeedFallback()); }
+function NativeSeedFallback(){ return ((Math.random()*4294967295)>>>0); }
+function mix(n){ n=(n+seed+0x6D2B79F5)|0; n=Math.imul(n^(n>>>15),n|1); n^=n+Math.imul(n^(n>>>7),n|61); return (n^(n>>>14))>>>0; }
+function unitNoise(i){ return mix(i) / 4294967295; }
+var rnd=function(n){ return Math.floor(unitNoise(n+0x51ED270B)*n); };
 
 /* 1) إشارات الخصوصية + توحيد مواصفات الجهاز */
 def(N,'globalPrivacyControl',true);
 def(N,'doNotTrack','1');
 def(N,'hardwareConcurrency',4);
 def(N,'deviceMemory',8);
-try{
-  var S=W.screen;
-  def(S,'width',412); def(S,'height',915); def(S,'availWidth',412); def(S,'availHeight',915);
-  def(S,'colorDepth',24); def(S,'pixelDepth',24);
-}catch(e){}
+/* Keep real screen geometry and color depth: fixed spoofed dimensions
+   create contradictions with the viewport and can break games/layouts. */
 
 /* 2) الواجهات الحساسة: بطارية، بلوتوث، USB، Serial، HID، NFC، MIDI، حساسات الحركة */
 ['getBattery','bluetooth','usb','serial','hid','getInstalledRelatedApps','wakeLock'].forEach(function(k){ kill(N,k); try{ kill(Navigator.prototype,k); }catch(e){} });
@@ -613,10 +615,18 @@ function patchGL(proto){
 try{ patchGL(W.WebGLRenderingContext&&WebGLRenderingContext.prototype); }catch(e){}
 try{ patchGL(W.WebGL2RenderingContext&&WebGL2RenderingContext.prototype); }catch(e){}
 
-/* 6) Canvas: تشويش بسيط بيتغيّر مع كل استدعاء */
+/* 6) Canvas: per-document deterministic noise.
+   Repeated reads in one page get the same perturbation, reducing API instability. */
 function jitter(d,w,h){
-  var c=3+rnd(5), n=w*h;
-  for(var i=0;i<c;i++){ var k=rnd(n)*4; if(k+2<d.length){ d[k]=d[k]^1; d[k+1]=d[k+1]^(rnd(2)); d[k+2]=d[k+2]^(rnd(2)); } }
+  var n=w*h, count=Math.min(7,Math.max(3,Math.floor(n/12000)+3));
+  for(var i=0;i<count;i++){
+    var pixel=mix(i*7919+ n*31) % n, k=pixel*4;
+    if(k+2<d.length){
+      d[k]=d[k]^1;
+      if((mix(i+101)&1)===1) d[k+1]=d[k+1]^1;
+      if((mix(i+211)&1)===1) d[k+2]=d[k+2]^1;
+    }
+  }
 }
 try{
   var CX=CanvasRenderingContext2D.prototype, oGI=CX.getImageData;
@@ -649,7 +659,7 @@ try{
       try{
         if(d.length<=200000 && !seen.has(d)){
           seen.add(d);
-          for(var i=0;i<d.length;i+=37){ d[i]+=(Math.random()-0.5)*1e-6; }
+          for(var i=0;i<d.length;i+=37){ d[i]+=(unitNoise(i+401)-0.5)*1e-6; }
         }
       }catch(e){}
       return d;
@@ -657,16 +667,16 @@ try{
     var oCF=AB.copyFromChannel;
     if(oCF) AB.copyFromChannel=function(dest){
       var r=oCF.apply(this,arguments);
-      try{ if(dest&&dest.length<=200000){ for(var i=0;i<dest.length;i+=37){ dest[i]+=(Math.random()-0.5)*1e-6; } } }catch(e){}
+      try{ if(dest&&dest.length<=200000){ for(var i=0;i<dest.length;i+=37){ dest[i]+=(unitNoise(i+401)-0.5)*1e-6; } } }catch(e){}
       return r;
     };
   }
   var AN=W.AnalyserNode&&AnalyserNode.prototype;
   if(AN){
     var oF=AN.getFloatFrequencyData;
-    if(oF) AN.getFloatFrequencyData=function(a){ oF.apply(this,arguments); try{ for(var i=0;i<a.length;i+=7){ a[i]+=(Math.random()-0.5)*1e-4; } }catch(e){} };
+    if(oF) AN.getFloatFrequencyData=function(a){ oF.apply(this,arguments); try{ for(var i=0;i<a.length;i+=7){ a[i]+=(unitNoise(i+809)-0.5)*1e-4; } }catch(e){} };
     var oB=AN.getByteFrequencyData;
-    if(oB) AN.getByteFrequencyData=function(a){ oB.apply(this,arguments); try{ for(var i=0;i<a.length;i+=11){ a[i]=Math.max(0,Math.min(255,a[i]+(rnd(3)-1))); } }catch(e){} };
+    if(oB) AN.getByteFrequencyData=function(a){ oB.apply(this,arguments); try{ for(var i=0;i<a.length;i+=11){ a[i]=Math.max(0,Math.min(255,a[i]+(Math.floor(unitNoise(i+1201)*3)-1))); } }catch(e){} };
   }
 }catch(e){}
 

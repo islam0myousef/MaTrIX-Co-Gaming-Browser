@@ -1,4 +1,4 @@
-# MaTRIX Co — Gaming Browser 4.1.3
+# MaTRIX Co — Gaming Browser 4.2.0
 
 متصفح Android مبني على WebView مع واجهة GX داكنة، إدارة تبويبات، أدوات ألعاب، وحماية تصفح.
 
@@ -14,6 +14,20 @@ chmod +x gradlew
 الناتج: `app/build/outputs/apk/debug/app-debug.apk`.
 
 لإصدار Release: `./gradlew assembleRelease`. يتم توقيعه تلقائيًا عند توفير المتغيرات `MX_KEYSTORE`, `MX_STORE_PASS`, `MX_KEY_ALIAS`, `MX_KEY_PASS`؛ وإذا لم تتوفر ينتج APK غير موقّع.
+
+## 4.2.0 — Privacy, Security & Gaming Consolidation
+
+- Fingerprint protection now uses per-document deterministic perturbation for Canvas and audio readouts. Repeated reads in the same document remain consistent instead of receiving fresh random noise on every call.
+- Removed fixed 412×915 screen-dimension spoofing. Real screen geometry and color depth are retained to avoid contradictions with viewport dimensions and reduce game/layout compatibility problems.
+- Release builds disable WebView remote debugging; debug builds retain it for development diagnostics.
+- Consolidated and retained the 4.1.x protections: no JavaScript-to-native bridge, native request filtering, third-party-cookie preference, mixed-content restrictions, Safe Browsing preference, external-scheme restrictions, and safe download handling.
+- Retained game-mode renderer prioritization, background-tab sleeping, and renderer recovery. These are existing capabilities, not claims of a new FPS boost.
+- Updated version metadata to `4.2.0` / `versionCode = 420`.
+
+### Scope and limitations
+- WebRTC behavior is not forcibly disabled because that can break game voice chat and video calls. WebView does not provide a universal in-app DNS leak guarantee; use Android Private DNS or a trusted VPN for device-level DNS/IP protection.
+- Fingerprint defenses reduce some exposed signals; they do not make the browser anonymous or guarantee a unique/undetectable fingerprint.
+- Static checks do not replace Android WebView testing on a physical device. Gradle build success must be verified separately.
 
 ## 4.1.3 — JavaScript Bridge Security
 

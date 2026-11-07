@@ -8,6 +8,9 @@ import java.io.File
 class MxApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        // DevTools is available only in debug builds; release builds must not
+        // expose WebView inspection endpoints to local USB/ADB sessions.
+        android.webkit.WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
         val prev = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { t, e ->
             try {
