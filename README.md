@@ -79,3 +79,11 @@ chmod +x gradlew
 - `androidx.webkit:webkit:1.12.1`
 - `minSdk 23`, `targetSdk 28`, `compileSdk 35`
 - Java/Kotlin JVM target 17
+
+
+## v4.1.4 — Safe Navigation & Downloads
+- Restrict external URI handlers to explicit user-gesture `mailto`, `tel`, and `sms` links.
+- Block arbitrary `intent://` and unknown external schemes instead of dispatching untrusted intents.
+- Accept downloads only from valid HTTP(S) URLs without embedded user-info credentials.
+- Sanitize downloaded filenames against path separators, control characters, and reserved filename characters.
+- Send a Referer only for same-origin downloads, reduced to the origin root to avoid leaking page paths and query strings.

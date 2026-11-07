@@ -58,3 +58,10 @@ Expected output:
 `app/build/outputs/apk/debug/app-debug.apk`
 
 Keep a backup before installing over an existing version. Android only permits in-place update when the signing certificate matches the installed app.
+
+
+## 4.1.4 — Safe Navigation & Downloads
+- Hardened external scheme handling: only user-initiated `mailto`, `tel`, and `sms` links can be handed to Android; arbitrary `intent://` and unknown schemes are blocked.
+- Download URLs are restricted to HTTP(S), reject embedded credentials, and filenames are sanitized before storage.
+- Download Referer is limited to same-origin and origin-root only.
+- Static checks performed during packaging; Android Gradle build and device runtime tests are not claimed unless run separately.

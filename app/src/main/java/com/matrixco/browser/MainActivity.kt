@@ -1180,23 +1180,22 @@ class MainActivity : Activity() {
                 "file" -> return !isOfflineFile(uri)
                 "about", "data", "blob" -> return false
                 else -> {
-                    if (IronGuard.externalSchemeAllowed(uri.scheme)) {
-                        if (req.hasGesture()) {
-                            try {
-                                val i = Intent(Intent.ACTION_VIEW, uri)
-                                i.addCategory(Intent.CATEGORY_BROWSABLE); i.component = null; i.selector = null
-                                startActivity(i)
-                            } catch (_: Exception) { toast("مفيش تطبيق يفتح الرابط ده") }
-                        }
-                    } else if (IronGuard.enabled()) {
-                        IronGuard.log(this@MainActivity, uri.host.orEmpty(), uri.toString(), IronGuard.Verdict(100, "محاولة فتح تطبيق خارجي (" + (uri.scheme ?: "?") + ")"))
-                        if (req.hasGesture()) toast("🛡️ اتمنع رابط تطبيق خارجي")
-                    } else if (req.hasGesture()) {
+                    val scheme = uri.scheme.orEmpty().lowercase(Locale.ROOT)
+                    // External handlers are restricted regardless of IronGuard mode.
+                    // Never parse arbitrary intent:// payloads from page content.
+                    if (IronGuard.externalSchemeAllowed(scheme) && req.hasGesture()) {
                         try {
-                            val i = if (uri.scheme == "intent") Intent.parseUri(uri.toString(), Intent.URI_INTENT_SCHEME) else Intent(Intent.ACTION_VIEW, uri)
-                            i.addCategory(Intent.CATEGORY_BROWSABLE); i.component = null; i.selector = null
-                            startActivity(i)
+                            val safeUri = Uri.parse(uri.toString())
+                            if (safeUri.scheme in setOf("mailto", "tel", "sms")) {
+                                val i = Intent(Intent.ACTION_VIEW, safeUri).addCategory(Intent.CATEGORY_BROWSABLE)
+                                startActivity(i)
+                            }
                         } catch (_: Exception) { toast("مفيش تطبيق يفتح الرابط ده") }
+                    } else {
+                        if (IronGuard.enabled()) {
+                            IronGuard.log(this@MainActivity, uri.host.orEmpty(), uri.toString(), IronGuard.Verdict(100, "محاولة فتح بروتوكول خارجي غير مسموح (" + (scheme.ifEmpty { "?" }) + ")"))
+                        }
+                        if (req.hasGesture()) toast("🛡️ تم منع رابط خارجي غير مسموح")
                     }
                     return true
                 }
@@ -1577,9 +1576,26 @@ class MainActivity : Activity() {
 
     private val riskyExt = listOf(".apk", ".apks", ".xapk", ".exe", ".bat", ".cmd", ".scr", ".msi", ".jar", ".vbs", ".ps1", ".sh", ".dmg", ".js")
 
+    private fun safeDownloadName(raw: String): String {
+        val leaf = raw.substringAfterLast('/').substringAfterLast('\\').trim()
+        val cleaned = leaf.replace(Regex("[\\u0000-\\u001F\\u007F]"), "_")
+            .replace(Regex("[<>:\"|?*]"), "_").trim('.', ' ')
+        return cleaned.take(120).ifBlank { "download_${System.currentTimeMillis()}" }
+    }
+
+    private fun downloadOrigin(raw: String): String? = try {
+        val u = Uri.parse(raw)
+        val scheme = u.scheme?.lowercase(Locale.ROOT)
+        val host = u.host?.lowercase(Locale.ROOT)
+        if (scheme !in setOf("http", "https") || host.isNullOrBlank() || !u.userInfo.isNullOrBlank()) null
+        else "$scheme://$host" + if (u.port != -1) ":${u.port}" else ""
+    } catch (_: Exception) { null }
+
     private fun startDownload(url: String, ua: String?, cd: String?, mime: String?, confirmed: Boolean = false) {
-        if (url.startsWith("blob:") || url.startsWith("data:")) { toast("الرابط ده مش مدعوم للتحميل المباشر"); return }
-        val name = URLUtil.guessFileName(url, cd, mime)
+        val origin = downloadOrigin(url)
+        if (origin == null) { toast("🛡️ تم رفض رابط تنزيل غير آمن أو غير مدعوم"); return }
+        val guessedName = URLUtil.guessFileName(url, cd, mime)
+        val name = safeDownloadName(guessedName)
         if (!confirmed && Cfg.bool(Cfg.DLWARN, true) && riskyExt.any { name.lowercase(Locale.ROOT).endsWith(it) }) {
             ui.sheet { box, d ->
                 box.addView(ui.titleView("⚠ ملف قد يكون ضارًا"))
@@ -1599,8 +1615,12 @@ class MainActivity : Activity() {
             val req = DownloadManager.Request(Uri.parse(url)).apply {
                 if (!mime.isNullOrBlank()) setMimeType(mime)
                 addRequestHeader("User-Agent", ua ?: baseUa)
-                CookieManager.getInstance().getCookie(url)?.let { addRequestHeader("Cookie", it) }
-                cur?.url?.takeIf { it.startsWith("http") }?.let { addRequestHeader("Referer", it) }
+                CookieManager.getInstance().getCookie(url)?.takeIf { it.isNotBlank() }?.let { addRequestHeader("Cookie", it) }
+                // Do not leak the current page path/query as Referer to a different download origin.
+                cur?.url?.let { pageUrl ->
+                    val pageOrigin = downloadOrigin(pageUrl)
+                    if (pageOrigin != null && pageOrigin == origin) addRequestHeader("Referer", pageOrigin + "/")
+                }
                 setTitle(name); setDescription("MaTrIX Co")
                 setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                 setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "MaTrIX/" + name)
