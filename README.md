@@ -116,3 +116,10 @@ chmod +x gradlew
 - Added safe address-bar protocol repair for common missing/typo HTTPS prefixes.
 - Recognizes explicit domains and adds HTTPS; ambiguous bare words or missing TLDs are sent to the configured search engine rather than guessing `.com`/`.net`.
 - WebRTC local-candidate exposure remains a known limitation requiring dedicated compatibility testing; no claim of complete IP-leak prevention is made.
+
+
+## v4.3.1 — Canvas interceptor correction
+- Removed the second randomized Canvas mutation from the SpyGuard script.
+- Kept a single deterministic Canvas perturbation layer in the document-start HARDEN script.
+- Restricted Canvas perturbation to small, detached canvases commonly used for fingerprint probes; connected canvases used by games and page rendering are not modified.
+- This reduces double-processing and rendering compatibility risks. It does not by itself prove fingerprint resistance; verify with repeated Canvas tests and image export checks.

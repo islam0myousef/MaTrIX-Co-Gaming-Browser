@@ -95,3 +95,9 @@ Keep a backup before installing over an existing version. Android only permits i
 - Static checks: JavaScript syntax check passed; URL resolver compiled and passed focused cases for bare domains, typo protocols, and search fallback; Manifest XML and ZIP integrity checked.
 - Android Gradle build was attempted but could not start because this environment cannot resolve `services.gradle.org` (UnknownHostException). Build/APK status is unverified.
 - Known limitation: WebRTC may still expose local host candidates on some WebView providers; this release does not claim complete WebRTC leak prevention.
+
+
+## v4.3.1 — Canvas interceptor correction
+- Removed duplicate/random Canvas mutation from MAIN; MAIN now only reports suspected Canvas reads.
+- HARDEN remains the sole Canvas mutation layer and now targets only small detached canvases.
+- Static source review and archive integrity checks are required; Android Gradle build and on-device BrowserLeaks validation remain pending.

@@ -372,23 +372,18 @@ function blocked(t){ return POL.indexOf(t)>=0; }
 W.__mxBlockType=function(t){ if(POL.indexOf(t)<0) POL.push(t); };
 if(SPY){
   try{
+    /* Canvas perturbation is owned exclusively by HARDEN.
+       This layer only reports fingerprint reads; it must never add a second,
+       random mutation on top of the deterministic document-start protection. */
     var CP=HTMLCanvasElement.prototype, oTD=CP.toDataURL, oTB=CP.toBlob;
     var CX=CanvasRenderingContext2D.prototype, oGI=CX.getImageData;
-    var noisy=function(c){
-      try{
-        var n=document.createElement('canvas'); n.width=c.width; n.height=c.height;
-        var x=n.getContext('2d'); x.drawImage(c,0,0);
-        for(var i=0;i<3;i++){ x.fillStyle='rgba('+(Math.random()*255|0)+',0,0,0.01)'; x.fillRect(Math.random()*n.width|0,Math.random()*n.height|0,1,1); }
-        return n;
-      }catch(e){ return c; }
-    };
-    var fpCanvas=function(c){ return !c.isConnected&&c.width*c.height<=200000; };
+    var fpCanvas=function(c){ return !!c && !c.isConnected && c.width>0 && c.height>0 && c.width*c.height<=200000; };
     CP.toDataURL=function(){
-      if(fpCanvas(this)){ report('canvas_fp','toDataURL'); if(blocked('canvas_fp')||FPN) return oTD.apply(noisy(this),arguments); }
+      if(fpCanvas(this)) report('canvas_fp','toDataURL');
       return oTD.apply(this,arguments);
     };
     CP.toBlob=function(){
-      if(fpCanvas(this)){ report('canvas_fp','toBlob'); if(blocked('canvas_fp')||FPN) return oTB.apply(noisy(this),arguments); }
+      if(fpCanvas(this)) report('canvas_fp','toBlob');
       return oTB.apply(this,arguments);
     };
     CX.getImageData=function(){
@@ -634,23 +629,35 @@ function jitter(d,w,h){
 }
 try{
   var CX=CanvasRenderingContext2D.prototype, oGI=CX.getImageData;
+  var CP=HTMLCanvasElement.prototype, oTD=CP.toDataURL, oTB=CP.toBlob;
+  /* Only small, detached canvases are treated as likely fingerprint probes.
+     Connected/game canvases are left untouched to avoid rendering regressions. */
+  function fpCanvas(c){
+    return !!c && !c.isConnected && c.width>0 && c.height>0 && c.width*c.height<=200000;
+  }
   CX.getImageData=function(x,y,w,h){
     var r=oGI.apply(this,arguments);
-    try{ if(r&&r.data&&r.width*r.height<=300000) jitter(r.data,r.width,r.height); }catch(e){}
+    try{ if(fpCanvas(this.canvas)&&r&&r.data) jitter(r.data,r.width,r.height); }catch(e){}
     return r;
   };
-  var CP=HTMLCanvasElement.prototype, oTD=CP.toDataURL, oTB=CP.toBlob;
-  var noisy=function(c){
+  function noisy(c){
     try{
-      if(!c.width||!c.height||c.width*c.height>300000) return c;
+      if(!fpCanvas(c)) return c;
       var n=document.createElement('canvas'); n.width=c.width; n.height=c.height;
-      var x=n.getContext('2d'); x.drawImage(c,0,0);
-      var id=oGI.call(x,0,0,n.width,n.height); jitter(id.data,n.width,n.height); x.putImageData(id,0,0);
+      var x=n.getContext('2d',{willReadFrequently:true}); if(!x) return c;
+      x.drawImage(c,0,0);
+      var id=oGI.call(x,0,0,n.width,n.height);
+      jitter(id.data,n.width,n.height);
+      x.putImageData(id,0,0);
       return n;
     }catch(e){ return c; }
+  }
+  CP.toDataURL=function(){
+    return oTD.apply(noisy(this),arguments);
   };
-  CP.toDataURL=function(){ return oTD.apply(noisy(this),arguments); };
-  CP.toBlob=function(){ return oTB.apply(noisy(this),arguments); };
+  CP.toBlob=function(){
+    return oTB.apply(noisy(this),arguments);
+  };
 }catch(e){}
 
 /* 7) Audio fingerprinting: deterministic, tiny noise on analyser output only.
