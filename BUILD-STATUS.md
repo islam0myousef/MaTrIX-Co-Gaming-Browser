@@ -116,3 +116,21 @@ Keep a backup before installing over an existing version. Android only permits i
 - Reordered runtime fallback so hardening is evaluated before MAIN.
 - Added `__mxH`, `__mxCanvasProtection`, and `__mxDocumentStart` diagnostic markers and explicit log output when document-start injection is unavailable.
 - Pending: Android release build, device validation, BrowserLeaks signature change, valid image rendering, and repeatability tests. No claim of successful APK build.
+
+
+## v4.4.0 — Automatic Threat Feed Updates
+- Added `ThreatFeedWorker.kt` using AndroidX WorkManager 2.11.2.
+- Unique periodic work scheduled every 6 hours, constrained to connected network.
+- App startup schedules background refresh; existing MainActivity stale-feed check remains as foreground fallback.
+- RuleUpdater freshness interval changed from 24h to 6h.
+- Last-known-good database is retained when source downloads fail or validation thresholds are not met.
+- Scope limitation: this refreshes the existing domain-based threat feeds; it does not dynamically update browser-engine fixes or fingerprint countermeasure code.
+- Pending: Android Gradle Release build, WorkManager execution on Android 12/ColorOS, and confirmation of actual feed refresh from app logs/UI.
+
+
+## v4.5.0 changes (2026-11-07)
+- `Updater.kt`: compact neon update dialog with animated GIF background, progress/status states, pause action, and Glide cleanup.
+- `Updater.kt`: persistent partial APK download with HTTP Range and If-Range (ETag/Last-Modified), Content-Range validation, SHA-256 validation, and safe fallback to a clean download when the server does not support resume.
+- `app/src/main/res/drawable-nodpi/matrix_dragon.gif`: user-supplied 498×280, 59-frame dragon animation.
+- `app/build.gradle.kts`: version 4.5.0 / code 450 and Glide 4.16.0.
+- Not yet built or device-tested. Resume depends on the release server supporting byte ranges and stable validators.

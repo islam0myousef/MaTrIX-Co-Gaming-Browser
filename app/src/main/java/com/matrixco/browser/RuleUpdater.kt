@@ -27,7 +27,7 @@ object RuleUpdater {
 
     private const val MAX_CHARS = 16_000_000
     private const val MIN_PER_SOURCE = 300
-    const val UPDATE_INTERVAL_MS = 24L * 60 * 60 * 1000
+    const val UPDATE_INTERVAL_MS = 6L * 60 * 60 * 1000
 
     private const val META_LAST_UPDATE = "remote_last_update"
     private const val META_LAST_MS = "remote_last_ms"
@@ -95,6 +95,16 @@ object RuleUpdater {
             running = false
             mainHandler.post { callback(result) }
         }
+    }
+
+    /** Synchronous entry point used only by the WorkManager worker. */
+    internal fun performScheduledUpdate(context: Context): UpdateResult {
+        val result = performUpdate(context.applicationContext)
+        if (result.success) {
+            try { FilterEngine.refreshEnabled(context.applicationContext) } catch (_: Throwable) {}
+            try { AdBlocker.refreshRules(context.applicationContext) } catch (_: Throwable) {}
+        }
+        return result
     }
 
     private fun performUpdate(context: Context): UpdateResult {

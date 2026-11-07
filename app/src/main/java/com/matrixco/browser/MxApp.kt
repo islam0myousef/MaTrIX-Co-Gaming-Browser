@@ -11,6 +11,13 @@ class MxApp : Application() {
         // DevTools is available only in debug builds; release builds must not
         // expose WebView inspection endpoints to local USB/ADB sessions.
         android.webkit.WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
+        // Periodic security-feed refresh; WorkManager waits for network and
+        // may defer execution under Android battery optimizations.
+        try {
+            ThreatFeedWorker.schedule(this)
+        } catch (t: Throwable) {
+            Log.w("MaTRIX.ThreatFeeds", "Could not schedule periodic feed refresh", t)
+        }
         val prev = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { t, e ->
             try {

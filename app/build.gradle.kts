@@ -16,8 +16,8 @@ android {
         applicationId = "com.matrixco.browser"
         minSdk = 23
         targetSdk = 28
-        versionCode = 433
-        versionName = "4.3.3"
+        versionCode = 450
+        versionName = "4.5.0"
     }
 
     signingConfigs {
@@ -62,4 +62,8 @@ android {
 
 dependencies {
     implementation("androidx.webkit:webkit:1.12.1")
+    // Persistent, network-constrained background refresh for security feeds.
+    implementation("androidx.work:work-runtime:2.11.2")
+    // GIF decoding for the animated GX update dialog.
+    implementation("com.github.bumptech.glide:glide:4.16.0")
 }

@@ -9,6 +9,7 @@ import android.content.pm.PackageInstaller
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -16,11 +17,15 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
+import android.view.WindowManager
 import android.widget.LinearLayout
+import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import com.bumptech.glide.Glide
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
@@ -77,38 +82,87 @@ object Updater {
     }
 
     fun download(ctx: Context, info: Info, onProgress: (Long, Long) -> Unit, cancelled: () -> Boolean): File {
-        val dir = File(ctx.cacheDir, "update").apply { mkdirs() }
-        val f = File(dir, "matrix-update.apk")
-        if (f.exists()) f.delete()
+        val dir = File(ctx.filesDir, "update").apply { mkdirs() }
+        val part = File(dir, "matrix-update.apk.part")
+        val meta = File(dir, "matrix-update.properties")
+        val complete = File(dir, "matrix-update.apk")
+        val props = java.util.Properties()
+        if (meta.exists()) try { meta.inputStream().use { props.load(it) } } catch (_: Exception) { meta.delete() }
+        if (props.getProperty("url")?.let { it != info.url } == true) {
+            part.delete(); meta.delete(); props.clear()
+        }
+        props.setProperty("url", info.url)
+        var existing = if (part.exists()) part.length() else 0L
+        if (info.size > 0L && existing > info.size) { part.delete(); existing = 0L }
+
         val c = URL(info.url).openConnection() as HttpURLConnection
         c.connectTimeout = 15000; c.readTimeout = 30000; c.instanceFollowRedirects = true
         c.setRequestProperty("User-Agent", "MaTrIX-Co-Updater")
+        if (existing > 0L) {
+            c.setRequestProperty("Range", "bytes=$existing-")
+            val validator = props.getProperty("etag")?.takeIf { it.isNotBlank() }
+                ?: props.getProperty("lastModified")?.takeIf { it.isNotBlank() }
+            if (validator != null) c.setRequestProperty("If-Range", validator)
+        }
         try {
-            if (c.responseCode != 200) throw IOException("HTTP " + c.responseCode)
-            val total = if (c.contentLengthLong > 0) c.contentLengthLong else info.size
+            val code = c.responseCode
+            if (code != HttpURLConnection.HTTP_OK && code != HttpURLConnection.HTTP_PARTIAL) throw IOException("HTTP $code")
+            val append = existing > 0L && code == HttpURLConnection.HTTP_PARTIAL
+            if (append) {
+                val cr = c.getHeaderField("Content-Range") ?: ""
+                val match = Regex("""bytes\s+(\d+)-(\d+)/(\d+|\*)""", RegexOption.IGNORE_CASE).find(cr)
+                if (match?.groupValues?.get(1)?.toLongOrNull() != existing) throw IOException("السيرفر أرسل نقطة استكمال غير صحيحة")
+                val oldValidator = props.getProperty("etag")?.takeIf { it.isNotBlank() }
+                    ?: props.getProperty("lastModified")?.takeIf { it.isNotBlank() }
+                val newValidator = c.getHeaderField("ETag")?.takeIf { it.isNotBlank() }
+                    ?: c.getHeaderField("Last-Modified")?.takeIf { it.isNotBlank() }
+                if (oldValidator != null && newValidator != null && oldValidator != newValidator) {
+                    throw IOException("ملف التحديث تغيّر على السيرفر؛ أعد المحاولة لتنزيل النسخة الجديدة بأمان")
+                }
+            } else {
+                // HTTP 200: server ignored Range or representation changed; restart safely.
+                existing = 0L; part.delete()
+            }
+            c.getHeaderField("ETag")?.let { props.setProperty("etag", it) }
+            c.getHeaderField("Last-Modified")?.let { props.setProperty("lastModified", it) }
+            meta.outputStream().use { props.store(it, "MaTRIX resumable updater") }
+            val responseLength = c.contentLengthLong
+            val rangeTotal = c.getHeaderField("Content-Range")?.substringAfterLast('/')?.toLongOrNull()
+            val total = rangeTotal?.takeIf { it > 0L } ?: info.size.takeIf { it > 0L }
+                ?: if (responseLength > 0L) existing + responseLength else -1L
+
             val md = MessageDigest.getInstance("SHA-256")
-            c.inputStream.use { inp ->
-                f.outputStream().use { out ->
-                    val buf = ByteArray(32 * 1024)
-                    var done = 0L; var last = 0L
+            if (append && part.exists()) part.inputStream().use { input ->
+                val hashBuffer = ByteArray(64 * 1024)
+                while (true) { val n = input.read(hashBuffer); if (n < 0) break; md.update(hashBuffer, 0, n) }
+            }
+            var done = existing
+            var lastUpdate = 0L
+            c.inputStream.use { input ->
+                java.io.FileOutputStream(part, append).buffered().use { out ->
+                    val buffer = ByteArray(64 * 1024)
                     while (true) {
-                        val n = inp.read(buf)
-                        if (n <= 0) break
-                        if (cancelled()) throw IOException("cancelled")
-                        out.write(buf, 0, n); md.update(buf, 0, n); done += n
+                        if (cancelled()) throw IOException("تم إيقاف التنزيل مؤقتًا")
+                        val n = input.read(buffer); if (n < 0) break; if (n == 0) continue
+                        out.write(buffer, 0, n); md.update(buffer, 0, n); done += n
                         val now = System.currentTimeMillis()
-                        if (now - last > 150) { last = now; onProgress(done, total) }
+                        if (now - lastUpdate >= 150L) { lastUpdate = now; onProgress(done, total) }
                     }
-                    onProgress(done, total)
                 }
             }
-            if (f.length() < 100_000) { f.delete(); throw IOException("الملف صغير بشكل مريب") }
-            val exp = info.sha256
-            if (exp != null) {
-                val got = md.digest().joinToString("") { "%02x".format(it) }
-                if (!got.equals(exp, true)) { f.delete(); throw IOException("الملف تالف (sha256 مختلف)") }
+            if (part.length() < 100_000L) throw IOException("الملف لم يكتمل أو حجمه غير صالح")
+            if (total > 0L && part.length() != total) throw IOException("انقطع الاتصال؛ تم حفظ الملف الجزئي للاستكمال")
+            if (info.sha256 != null) {
+                val actual = md.digest().joinToString("") { "%02x".format(it) }
+                if (!actual.equals(info.sha256, true)) {
+                    part.delete(); meta.delete(); throw IOException("الملف تالف (SHA-256 غير مطابق)")
+                }
             }
-            return f
+            if (complete.exists()) complete.delete()
+            if (!part.renameTo(complete)) { part.copyTo(complete, overwrite = true); part.delete() }
+            meta.delete()
+            onProgress(complete.length(), total.takeIf { it > 0L } ?: complete.length())
+            return complete
         } finally { c.disconnect() }
     }
 
@@ -188,89 +242,126 @@ class UpdateUi(private val a: MainActivity, private val ui: UiKit) {
         d.requestWindowFeature(Window.FEATURE_NO_TITLE)
         var cancelled = false
         var busy = false
-        val box = LinearLayout(a).apply {
-            orientation = LinearLayout.VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_RTL
-            setPadding(dp(20), dp(20), dp(20), dp(16))
-            background = Ui.round(th.surface, dp(24).toFloat())
-        }
-        box.addView(TextView(a).apply { text = "تحديث جديد متاح"; textSize = 18f; setTextColor(th.text); typeface = Typeface.DEFAULT_BOLD })
-        box.addView(TextView(a).apply {
-            text = "$cur  ←  ${info.version}" + (if (info.size > 0) "   •   " + mb(info.size) + " MB" else "")
-            textSize = 13f; setTextColor(th.accent); setPadding(0, dp(4), 0, dp(10))
-        })
-        val notes = info.notes.trim()
-        if (notes.isNotEmpty()) {
-            val sv = ScrollView(a)
-            sv.addView(TextView(a).apply { text = notes; textSize = 13f; setTextColor(th.sub); setLineSpacing(0f, 1.2f) })
-            box.addView(sv, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(130)))
-        }
-        val status = TextView(a).apply { textSize = 12f; setTextColor(th.sub); setPadding(0, dp(12), 0, dp(4)); visibility = View.GONE }
-        val bar = ProgressBar(a, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100; visibility = View.GONE }
-        box.addView(status); box.addView(bar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(8)))
-        val row = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(14), 0, 0) }
-        box.addView(row)
+        fun rounded(color: Int, stroke: Int = Color.TRANSPARENT, radius: Int = 20): GradientDrawable =
+            GradientDrawable().apply { setColor(color); cornerRadius = dp(radius).toFloat(); if (stroke != Color.TRANSPARENT) setStroke(dp(1), stroke) }
 
+        val card = FrameLayout(a).apply {
+            background = rounded(0xFF0D0B18.toInt(), 0xFF7541A1.toInt(), 25)
+            clipToOutline = true; elevation = dp(18).toFloat()
+        }
+        val dragon = ImageView(a).apply { scaleType = ImageView.ScaleType.CENTER_CROP; alpha = 0.64f; contentDescription = "MaTRIX animated dragon" }
+        card.addView(dragon, FrameLayout.LayoutParams(-1, -1))
+        val veil = View(a).apply {
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0xB8090712.toInt(), 0xA60D0B1B.toInt(), 0xE60A0914.toInt()))
+        }
+        card.addView(veil, FrameLayout.LayoutParams(-1, -1))
+        val content = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_LTR; setPadding(dp(20), dp(18), dp(20), dp(18)) }
+        card.addView(content, FrameLayout.LayoutParams(-1, -2))
+
+        val header = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        header.addView(TextView(a).apply {
+            text = "MATRIX  GX  •  SYSTEM UPDATE"; textSize = 10f; letterSpacing = 0.12f
+            setTextColor(0xFFBE85FF.toInt()); typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        header.addView(TextView(a).apply {
+            text = "×"; textSize = 26f; gravity = Gravity.CENTER; setTextColor(Color.WHITE)
+            background = rounded(0x442D2840, 0x665D4C78, 50)
+            setOnClickListener { if (!busy) d.dismiss() else cancelled = true }
+        }, LinearLayout.LayoutParams(dp(34), dp(34)))
+        content.addView(header)
+
+        content.addView(TextView(a).apply {
+            text = "UPDATE AVAILABLE"; textSize = 21f; gravity = Gravity.CENTER; setTextColor(Color.WHITE)
+            typeface = Typeface.create("sans-serif-black", Typeface.BOLD); letterSpacing = 0.035f; setPadding(0, dp(15), 0, dp(2))
+        })
+        content.addView(TextView(a).apply {
+            text = "${info.version}  •  ${if (info.size > 0) mb(info.size) + " MB" else "NEW VERSION"}"
+            textSize = 13f; gravity = Gravity.CENTER; setTextColor(0xFFC391FF.toInt()); setPadding(0, 0, 0, dp(12))
+        })
+        if (info.notes.isNotBlank()) content.addView(TextView(a).apply {
+            text = info.notes.trim(); textSize = 12f; setTextColor(0xFFDCD6EB.toInt()); gravity = Gravity.CENTER
+            maxLines = 3; ellipsize = android.text.TextUtils.TruncateAt.END; setLineSpacing(0f, 1.12f)
+            setPadding(dp(8), dp(4), dp(8), dp(10))
+        })
+        val status = TextView(a).apply { textSize = 11f; setTextColor(0xFFDCD2F0.toInt()); gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(7)); visibility = View.GONE }
+        content.addView(status)
+        val bar = ProgressBar(a, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 100; progressTintList = android.content.res.ColorStateList.valueOf(0xFFB153FF.toInt())
+            progressBackgroundTintList = android.content.res.ColorStateList.valueOf(0x665E5272); visibility = View.GONE
+        }
+        content.addView(bar, LinearLayout.LayoutParams(-1, dp(8)))
+        val metrics = TextView(a).apply {
+            text = "SECURE UPDATE  •  RESUME SUPPORTED"; textSize = 9f; gravity = Gravity.CENTER; letterSpacing = 0.08f
+            setTextColor(0xFF69D3EB.toInt()); setPadding(0, dp(11), 0, dp(3))
+        }
+        content.addView(metrics)
+        val actions = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(13), 0, 0) }
+        content.addView(actions)
+
+        fun actionButton(label: String, primary: Boolean, click: () -> Unit) = TextView(a).apply {
+            text = label; textSize = 13f; gravity = Gravity.CENTER; typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            setTextColor(Color.WHITE)
+            background = if (primary) GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+                intArrayOf(0xFF8E3DDE.toInt(), 0xFF4487E2.toInt())).apply { cornerRadius = dp(15).toFloat() }
+                else rounded(0x552A2638, 0x665F5574, 15)
+            setPadding(dp(12), dp(13), dp(12), dp(13)); isClickable = true; isFocusable = true; setOnClickListener { click() }
+        }
         lateinit var buildButtons: () -> Unit
         fun start() {
             if (!canInstall()) {
-                a.toastMsg("فعّل \"السماح من هذا المصدر\" للمتصفح، وارجع واضغط تحديث")
+                a.toastMsg("فعّل السماح من هذا المصدر للمتصفح، وارجع واضغط تحديث")
                 try { a.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + a.packageName))) } catch (_: Exception) {}
                 return
             }
-            busy = true; cancelled = false
-            row.removeAllViews()
-            row.addView(ui.button("إلغاء", false) { cancelled = true })
+            busy = true; cancelled = false; actions.removeAllViews()
+            actions.addView(actionButton("إيقاف التنزيل مؤقتًا", false) { cancelled = true })
             status.visibility = View.VISIBLE; bar.visibility = View.VISIBLE
-            status.text = "⏳ جاري التنزيل..."
+            metrics.text = "RESUMABLE DOWNLOAD  •  KEEP THIS UPDATE"
+            status.text = "جارٍ تجهيز التنزيل..."
             Thread {
                 try {
-                    val f = Updater.download(a, info, { done, total ->
-                        a.runOnUiThread {
-                            val pct = if (total > 0) (done * 100 / total).toInt() else 0
-                            bar.progress = pct
-                            status.text = "جاري التنزيل: " + mb(done) + " / " + mb(total) + " MB  (" + pct + "%)"
-                        }
-                    }, { cancelled })
-                    a.runOnUiThread { status.text = "جاري التثبيت... أكّد من نافذة النظام" }
-                    Updater.install(a, f)
+                    val file = Updater.download(a, info, { done, total -> a.runOnUiThread {
+                        val pct = if (total > 0L) (done * 100L / total).toInt().coerceIn(0, 100) else 0
+                        bar.progress = pct
+                        status.text = if (total > 0L) "DOWNLOADING  •  ${mb(done)} / ${mb(total)} MB  •  $pct%" else "DOWNLOADING  •  ${mb(done)} MB"
+                    } }, { cancelled })
+                    a.runOnUiThread { status.text = "اكتمل التنزيل — جارٍ فتح مُثبّت Android..." }
+                    Updater.install(a, file)
                     a.runOnUiThread { d.dismiss() }
                 } catch (e: Exception) {
                     a.runOnUiThread {
                         busy = false
-                        status.text = if (cancelled) "اتلغى التنزيل" else "⚠ فشل: " + (e.message ?: "خطأ").take(80)
-                        bar.visibility = View.GONE
-                        buildButtons()
+                        status.text = if (cancelled) "تم الاحتفاظ بالجزء الذي تم تنزيله — اضغط استكمال عند عودة الإنترنت" else "⚠ ${e.message ?: "تعذر إكمال التنزيل"}".take(130)
+                        bar.visibility = View.GONE; metrics.text = "PARTIAL FILE PRESERVED  •  RESUME READY"; buildButtons()
                     }
                 }
             }.start()
         }
         buildButtons = {
-            row.removeAllViews()
-            row.addView(ui.button("حدّث الآن") { start() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            val links = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
-            links.addView(TextView(a).apply {
-                text = "لاحقًا"; textSize = 13f; setTextColor(th.sub); setPadding(dp(14), dp(12), dp(14), dp(4))
-                setOnClickListener { d.dismiss() }
-            })
-            links.addView(TextView(a).apply {
-                text = "تخطي النسخة دي"; textSize = 13f; setTextColor(th.sub); setPadding(dp(14), dp(12), dp(14), dp(4))
-                setOnClickListener { Cfg.setStr("upd_skip", info.tag); d.dismiss() }
-            })
-            row.addView(links)
+            actions.removeAllViews()
+            actions.addView(actionButton("⬇   DOWNLOAD / RESUME UPDATE", true) { start() })
+            val secondary = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
+            val p1 = LinearLayout.LayoutParams(0, -2, 1f).apply { topMargin = dp(8); marginEnd = dp(5) }
+            val p2 = LinearLayout.LayoutParams(0, -2, 1f).apply { topMargin = dp(8); marginStart = dp(5) }
+            secondary.addView(actionButton("لاحقًا", false) { d.dismiss() }, p1)
+            secondary.addView(actionButton("تخطي الإصدار", false) { Cfg.setStr("upd_skip", info.tag); d.dismiss() }, p2)
+            actions.addView(secondary)
         }
         buildButtons()
         d.setCancelable(false)
         d.setOnKeyListener { _, code, ev ->
-            if (code == android.view.KeyEvent.KEYCODE_BACK && ev.action == android.view.KeyEvent.ACTION_UP) {
-                if (busy) cancelled = true else d.dismiss()
-                true
-            } else false
+            if (code == android.view.KeyEvent.KEYCODE_BACK && ev.action == android.view.KeyEvent.ACTION_UP) { if (busy) cancelled = true else d.dismiss(); true } else false
         }
-        d.setContentView(box)
+        d.setContentView(card)
         d.window?.let { w ->
-            w.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-            w.setLayout(minOf(dp(360), a.resources.displayMetrics.widthPixels - dp(24)), ViewGroup.LayoutParams.WRAP_CONTENT)
+            w.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT)); w.setDimAmount(0.78f); w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            w.setLayout(minOf(dp(380), a.resources.displayMetrics.widthPixels - dp(28)), ViewGroup.LayoutParams.WRAP_CONTENT)
         }
+        d.setOnDismissListener { try { Glide.with(a).clear(dragon) } catch (_: Exception) {} }
         d.show()
+        d.window?.setLayout(minOf(dp(380), a.resources.displayMetrics.widthPixels - dp(28)), ViewGroup.LayoutParams.WRAP_CONTENT)
+        Glide.with(a).asGif().load(R.drawable.matrix_dragon).into(dragon)
     }
+
 }

@@ -138,3 +138,19 @@ chmod +x gradlew
 - The hardening layer exposes `window.__mxH` and `window.__mxCanvasProtection` version markers for runtime diagnostics.
 - Document-start registration now exposes `window.__mxDocumentStart` and logs whether the WebView supports true document-start injection.
 - Runtime fallback installs hardening before the main script layer. This fallback is still late relative to page scripts; true first-script protection requires DOCUMENT_START_SCRIPT support.
+
+
+## v4.4.0 — Automatic Threat Feed Updates
+- Added AndroidX WorkManager periodic refresh for the existing remote domain/threat feeds.
+- Refresh is scheduled every 6 hours with a connected-network constraint; Android may defer execution under Doze/battery optimizations.
+- App foreground startup retains the existing stale-feed check, now using a 6-hour freshness window.
+- Existing RuleUpdater validation and atomic database replacement behavior are retained; failed/undersized updates do not replace the last known-good database.
+- This release updates domain/URL threat intelligence feeds already supported by RuleUpdater. It does not remotely patch Chromium/WebView vulnerabilities or dynamically add new Canvas/WebGL/Audio/WebRTC countermeasures; those require reviewed application code updates.
+
+
+## v4.5.0 — GX Animated Update Experience
+- Redesigned the in-app update dialog with a compact neon purple/cyan gaming layout.
+- Added the supplied animated dragon GIF as a full-bleed dialog background with a dark readability scrim.
+- Added Glide 4.16.0 for GIF decoding and lifecycle cleanup when the dialog closes.
+- Added resumable APK downloads using HTTP Range / If-Range validators, a persistent `.part` file, and ETag/Last-Modified metadata.
+- Resume depends on server byte-range support; if the host ignores Range or changes the file, the updater safely restarts rather than appending invalid bytes.
