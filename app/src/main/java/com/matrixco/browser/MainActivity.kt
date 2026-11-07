@@ -885,11 +885,16 @@ class MainActivity : Activity() {
         w.setBackgroundColor(theme.bg)
         w.overScrollMode = View.OVER_SCROLL_NEVER
         w.addJavascriptInterface(ShieldBridge(tab), "__mxb")
-        if (Cfg.bool(Cfg.FP, true)) {
-            try {
-                if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT))
+        try {
+            if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)) {
+                // Install timer virtualization independently from fingerprint protection.
+                androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, Scripts.TIMER_ENGINE, setOf("*"))
+                if (Cfg.bool(Cfg.FP, true)) {
                     androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, Scripts.HARDEN, setOf("*"))
-            } catch (_: Throwable) {}
+                }
+            }
+        } catch (error: Throwable) {
+            Log.w("MaTRIX.Inject", "Document-start script registration failed; runtime fallback will be used", error)
         }
         w.webViewClient = makeClient(tab)
         w.webChromeClient = makeChrome(tab)
@@ -1033,6 +1038,9 @@ class MainActivity : Activity() {
         val yt = host.endsWith("youtube.com") || host.endsWith("youtube-nocookie.com")
         val spy = on && AdBlocker.spyOn() && !isGameHost(host)
         val pol = if (spy) db.blockedTypesFor(host) else emptyList()
+        // Idempotent fallback for WebView providers without DOCUMENT_START_SCRIPT.
+        // When document-start is available this call is a no-op due to __mxTimer.
+        tab.web.evaluateJavascript(Scripts.TIMER_ENGINE, null)
         tab.web.evaluateJavascript(
             Scripts.main(host, tab.skipMode, Cfg.bool(Cfg.DARK, false), yt, on && AdBlocker.adsOn(), on && AdBlocker.annoyOn(), spy, Cfg.bool(Cfg.FP, true), Cfg.bool(Cfg.BGAUDIO, false), pol), null
         )

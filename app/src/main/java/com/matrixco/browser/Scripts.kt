@@ -26,6 +26,159 @@ object Scripts {
         "[class*='newsletter-popup']", "[class*='push-notification-prompt']", "[id*='notification-prompt']"
     ).joinToString(",")
 
+    /**
+     * Isolated time acceleration engine.
+     * It is installed independently from fingerprint protection and remains at
+     * 1x speed until the user enables a supported skip mode.
+     */
+    val TIMER_ENGINE = """
+(function(){
+  'use strict';
+  var W=window;
+  if(W.__mxTimer) return;
+
+  var NativeDate=W.Date;
+  var nativeSetTimeout=W.setTimeout.bind(W);
+  var nativeClearTimeout=W.clearTimeout.bind(W);
+  var nativePerformanceNow=(W.performance&&W.performance.now)
+    ? W.performance.now.bind(W.performance) : null;
+
+  var speed=1;
+  var realBase=NativeDate.now();
+  var virtualBase=realBase;
+  var perfRealBase=nativePerformanceNow?nativePerformanceNow():0;
+  var perfVirtualBase=perfRealBase;
+  var timers=Object.create(null);
+  var nextId=910000;
+
+  function realNow(){ return NativeDate.now(); }
+  function virtualNow(){ return virtualBase+(realNow()-realBase)*speed; }
+  function virtualPerformanceNow(){
+    if(!nativePerformanceNow) return 0;
+    return perfVirtualBase+(nativePerformanceNow()-perfRealBase)*speed;
+  }
+
+  function schedule(id){
+    var item=timers[id];
+    if(!item) return;
+    var delay=Math.max(0,(item.due-virtualNow())/speed);
+    item.nativeId=nativeSetTimeout(function(){ fire(id); },delay);
+  }
+
+  function fire(id){
+    var item=timers[id];
+    if(!item) return;
+    if(item.interval){
+      item.due=virtualNow()+item.delay;
+      schedule(id);
+    }else{
+      delete timers[id];
+    }
+    try{
+      item.callback.apply(W,item.args);
+    }catch(error){
+      nativeSetTimeout(function(){ throw error; },0);
+    }
+  }
+
+  function makeTimer(interval){
+    return function(callback,delay){
+      var args=Array.prototype.slice.call(arguments,2);
+      if(typeof callback!=='function'){
+        var source=String(callback);
+        callback=function(){ (0,eval)(source); };
+      }
+      delay=Number(delay)||0;
+      if(delay<0) delay=0;
+      if(interval&&delay<4) delay=4;
+      var id=++nextId;
+      timers[id]={
+        callback:callback,
+        args:args,
+        delay:delay,
+        interval:interval,
+        due:virtualNow()+delay,
+        nativeId:null
+      };
+      schedule(id);
+      return id;
+    };
+  }
+
+  function clearTimer(id){
+    var item=timers[id];
+    if(item){
+      if(item.nativeId!==null) nativeClearTimeout(item.nativeId);
+      delete timers[id];
+    }else{
+      nativeClearTimeout(id);
+    }
+  }
+
+  function setSpeed(next){
+    next=Number(next);
+    if(!isFinite(next)) next=1;
+    next=Math.max(1,Math.min(20,next));
+    if(next===speed) return;
+    var currentVirtual=virtualNow();
+    var currentPerf=nativePerformanceNow?virtualPerformanceNow():0;
+    realBase=realNow();
+    virtualBase=currentVirtual;
+    if(nativePerformanceNow){
+      perfRealBase=nativePerformanceNow();
+      perfVirtualBase=currentPerf;
+    }
+    speed=next;
+    Object.keys(timers).forEach(function(id){
+      var item=timers[id];
+      if(item.nativeId!==null) nativeClearTimeout(item.nativeId);
+      item.nativeId=null;
+      schedule(id);
+    });
+  }
+
+  try{
+    W.setTimeout=makeTimer(false);
+    W.setInterval=makeTimer(true);
+    W.clearTimeout=clearTimer;
+    W.clearInterval=clearTimer;
+  }catch(error){}
+
+  try{
+    W.Date=new Proxy(NativeDate,{
+      construct:function(target,args){
+        if(args.length===0) return new target(Math.floor(virtualNow()));
+        return Reflect.construct(target,args);
+      },
+      get:function(target,property){
+        if(property==='now') return function(){ return Math.floor(virtualNow()); };
+        return Reflect.get(target,property,target);
+      }
+    });
+  }catch(error){}
+
+  try{
+    if(nativePerformanceNow){
+      try{
+        Object.defineProperty(W.performance,'now',{
+          configurable:true,
+          value:virtualPerformanceNow
+        });
+      }catch(error){
+        W.performance.now=virtualPerformanceNow;
+      }
+    }
+  }catch(error){}
+
+  W.__mxTimer={
+    setSpeed:setSpeed,
+    reset:function(){ setSpeed(1); },
+    realNow:realNow,
+    getSpeed:function(){ return speed; }
+  };
+})();
+"""
+
     private val MAIN = """
 (function(){
 'use strict';
@@ -37,48 +190,11 @@ var SEL="%%SEL%%";
 var YT=%%YT%%, ANNOY=%%ANNOY%%, SPY=%%SPY%%, FPN=%%FP%%, BG=%%BG%%, POL=%%POL%%;
 var mode=%%SKIP%%;
 var OD=W.Date, oST=W.setTimeout, oSI=W.setInterval, oCT=W.clearTimeout;
-var oPN=(W.performance&&W.performance.now)?W.performance.now.bind(W.performance):null;
-var F=1, rBase=OD.now(), vBase=rBase, pBase=oPN?oPN():0, pvBase=pBase;
-function vnow(){ return vBase+(OD.now()-rBase)*F; }
-function pnow(){ return pvBase+(oPN()-pBase)*F; }
+var TIMER=W.__mxTimer;
+var realNow=(TIMER&&TIMER.realNow)?TIMER.realNow:function(){ return OD.now(); };
 
-/* ===== محرك الوقت: كل المؤقتات تمر من هنا ===== */
-var timers={}, seq=900000;
-function schedule(id){
-  var t=timers[id]; if(!t) return;
-  var wait=Math.max(0,(t.due-vnow())/F);
-  t.real=oST(function(){ fire(id); }, wait);
-}
-function fire(id){
-  var t=timers[id]; if(!t) return;
-  if(t.iv){ t.due=vnow()+t.delay; schedule(id); } else { delete timers[id]; }
-  try{ t.fn.apply(W,t.args); }catch(e){ oST(function(){ throw e; },0); }
-}
-function mk(iv){
-  return function(fn,d){
-    var args=[].slice.call(arguments,2);
-    if(typeof fn!=='function'){ var src=String(fn); fn=function(){ (0,eval)(src); }; }
-    d=+d||0; if(d<0) d=0; if(iv&&d<4) d=4;
-    var id=++seq;
-    timers[id]={fn:fn,args:args,delay:d,iv:iv,due:vnow()+d,real:0};
-    schedule(id);
-    return id;
-  };
-}
-try{
-  W.setTimeout=mk(false); W.setInterval=mk(true);
-  W.clearTimeout=W.clearInterval=function(id){
-    var t=timers[id];
-    if(t){ oCT(t.real); delete timers[id]; } else { oCT(id); }
-  };
-}catch(e){}
-try{
-  W.Date=new Proxy(OD,{
-    construct:function(t,a){ if(a.length===0) return new t(Math.floor(vnow())); return Reflect.construct(t,a); },
-    get:function(t,p){ if(p==='now') return function(){ return Math.floor(vnow()); }; return t[p]; }
-  });
-}catch(e){}
-try{ if(oPN) W.performance.now=pnow; }catch(e){}
+/* The timer virtualization engine is installed independently at document start.
+   This module only controls its speed; fingerprint settings never affect it. */
 
 /* ===== قطع طلبات fetch/XHR/Beacon للنطاقات المحجوبة (يظهر كفشل شبكة حقيقي) ===== */
 var MB=W.__mxb;
@@ -121,15 +237,11 @@ try{
 }catch(e){}
 
 function setF(nf){
-  if(nf===F) return;
-  vBase=vnow(); rBase=OD.now();
-  pvBase=oPN?pnow():0; pBase=oPN?oPN():0;
-  F=nf;
-  for(var k in timers){ var t=timers[k]; oCT(t.real); schedule(k); }
+  if(TIMER&&TIMER.setSpeed) TIMER.setSpeed(nf);
 }
 var turbo=false, tEnd=0, announced=false;
 function turboOn(f,ms,auto){
-  setF(f); turbo=true; tEnd=OD.now()+ms;
+  setF(f); turbo=true; tEnd=realNow()+ms;
   if(auto&&!announced){ announced=true; try{ console.log('MX_SKIP_AUTO'); }catch(e){} }
 }
 
@@ -227,11 +339,11 @@ function unwall(){
 /* ===== حارس النوافذ المنبثقة ===== */
 var lastG=0;
 ['touchstart','touchend','mousedown','click','keydown'].forEach(function(n){
-  W.addEventListener(n,function(ev){ if(ev.isTrusted) lastG=OD.now(); },true);
+  W.addEventListener(n,function(ev){ if(ev.isTrusted) lastG=realNow(); },true);
 });
 if(ANNOY) try{
   var oOpen=W.open;
-  W.open=function(){ if(OD.now()-lastG>900) return null; return oOpen.apply(W,arguments); };
+  W.open=function(){ if(realNow()-lastG>900) return null; return oOpen.apply(W,arguments); };
 }catch(e){}
 
 /* ===== يوتيوب ===== */
@@ -419,9 +531,9 @@ var fpsRun=false;
 W.__mxFps=function(on){
   if(!on){ fpsRun=false; return; }
   if(fpsRun) return; fpsRun=true;
-  var n=0,t=OD.now();
+  var n=0,t=realNow();
   (function loop(){
-    n++; var now=OD.now();
+    n++; var now=realNow();
     if(now-t>=1000){ try{ console.log('MX_FPS:'+n); }catch(e){} n=0; t=now; }
     if(fpsRun) requestAnimationFrame(loop);
   })();
@@ -442,7 +554,7 @@ var ticks=0, sc=0;
 function tick(){
   ticks++;
   if(ticks%3===0) scanVideos();
-  if(turbo&&OD.now()>tEnd){ setF(1); turbo=false; }
+  if(turbo&&realNow()>tEnd){ setF(1); turbo=false; }
   if(ANNOY&&ticks<70) unwall();
   if(mode!==0){
     if(!turbo&&mode===2) turboOn(12,45000,false);

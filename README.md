@@ -1,4 +1,4 @@
-# MaTRIX Co — Gaming Browser 4.1.1
+# MaTRIX Co — Gaming Browser 4.1.2
 
 متصفح Android مبني على WebView مع واجهة GX داكنة، إدارة تبويبات، أدوات ألعاب، وحماية تصفح.
 
@@ -14,6 +14,16 @@ chmod +x gradlew
 الناتج: `app/build/outputs/apk/debug/app-debug.apk`.
 
 لإصدار Release: `./gradlew assembleRelease`. يتم توقيعه تلقائيًا عند توفير المتغيرات `MX_KEYSTORE`, `MX_STORE_PASS`, `MX_KEY_ALIAS`, `MX_KEY_PASS`؛ وإذا لم تتوفر ينتج APK غير موقّع.
+
+## 4.1.2 — Isolated Timer Engine
+
+- فصل محرك تسريع المؤقتات عن سكريبتات الحماية من البصمة.
+- تثبيت محرك الوقت بشكل مستقل عند بداية المستند عبر WebView DOCUMENT_START_SCRIPT عند توفره.
+- إضافة مسار حقن احتياطي متكرر بأمان لمزودي WebView الذين لا يدعمون Document Start Scripts.
+- جعل تسريع الوقت معتمدًا على واجهة `__mxTimer` مستقلة، ولا يعمل إلا عند تفعيل وضع التخطي.
+- الإبقاء على `Date` و`performance.now` متزامنين مع ساعة افتراضية، مع استخدام ساعة حقيقية لانتهاء مدة Turbo.
+- تحديد حد أقصى للسرعة 20x لمنع القيم غير المنضبطة.
+- تحديث الإصدار إلى `4.1.2` ورقم البناء `412`.
 
 ## 4.1.1 — Renderer Recovery
 
