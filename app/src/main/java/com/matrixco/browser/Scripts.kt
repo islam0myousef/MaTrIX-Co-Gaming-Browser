@@ -630,19 +630,24 @@ function jitter(d,w,h){
 try{
   var CX=CanvasRenderingContext2D.prototype, oGI=CX.getImageData;
   var CP=HTMLCanvasElement.prototype, oTD=CP.toDataURL, oTB=CP.toBlob;
-  /* Only small, detached canvases are treated as likely fingerprint probes.
-     Connected/game canvases are left untouched to avoid rendering regressions. */
-  function fpCanvas(c){
-    return !!c && !c.isConnected && c.width>0 && c.height>0 && c.width*c.height<=200000;
+  /* Export APIs are the common Canvas fingerprint surface. Apply the
+     deterministic perturbation to a temporary copy for small canvases,
+     regardless of DOM attachment. Never alter the page's original canvas.
+     Keep getImageData on connected canvases untouched for game/rendering safety. */
+  function smallCanvas(c){
+    return !!c && c.width>0 && c.height>0 && c.width*c.height<=200000;
   }
   CX.getImageData=function(x,y,w,h){
     var r=oGI.apply(this,arguments);
-    try{ if(fpCanvas(this.canvas)&&r&&r.data) jitter(r.data,r.width,r.height); }catch(e){}
+    try{
+      if(!this.canvas.isConnected && smallCanvas(this.canvas) && r && r.data)
+        jitter(r.data,r.width,r.height);
+    }catch(e){}
     return r;
   };
   function noisy(c){
     try{
-      if(!fpCanvas(c)) return c;
+      if(!smallCanvas(c)) return c;
       var n=document.createElement('canvas'); n.width=c.width; n.height=c.height;
       var x=n.getContext('2d',{willReadFrequently:true}); if(!x) return c;
       x.drawImage(c,0,0);

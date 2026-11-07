@@ -101,3 +101,10 @@ Keep a backup before installing over an existing version. Android only permits i
 - Removed duplicate/random Canvas mutation from MAIN; MAIN now only reports suspected Canvas reads.
 - HARDEN remains the sole Canvas mutation layer and now targets only small detached canvases.
 - Static source review and archive integrity checks are required; Android Gradle build and on-device BrowserLeaks validation remain pending.
+
+
+## v4.3.2 — Canvas export coverage
+- Removed the DOM-detachment restriction from the small-canvas export path (`toDataURL` / `toBlob`).
+- Export protection works on a temporary canvas copy, leaving the original page canvas unchanged.
+- Connected-canvas `getImageData` remains untouched for compatibility; this leaves a possible fingerprinting path that requires separate testing.
+- JavaScript syntax and ZIP integrity checks are required; Android Gradle build and BrowserLeaks device validation are pending.

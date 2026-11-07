@@ -123,3 +123,10 @@ chmod +x gradlew
 - Kept a single deterministic Canvas perturbation layer in the document-start HARDEN script.
 - Restricted Canvas perturbation to small, detached canvases commonly used for fingerprint probes; connected canvases used by games and page rendering are not modified.
 - This reduces double-processing and rendering compatibility risks. It does not by itself prove fingerprint resistance; verify with repeated Canvas tests and image export checks.
+
+
+## v4.3.2 — Canvas export coverage
+- Canvas export protection now covers small canvases whether attached to the DOM or detached.
+- `toDataURL` and `toBlob` perturb a temporary copy only; the original page canvas is not modified.
+- `getImageData` remains unmodified for connected canvases to reduce the risk of affecting game rendering and page logic.
+- This is a targeted compatibility/privacy improvement, not a claim of complete fingerprint protection. Verify exported PNG validity and repeatability on-device.
