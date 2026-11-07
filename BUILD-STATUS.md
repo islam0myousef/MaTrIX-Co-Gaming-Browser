@@ -86,3 +86,12 @@ Keep a backup before installing over an existing version. Android only permits i
 - Enabled `android.buildFeatures.buildConfig = true` for AGP 8+.
 - Fixes Kotlin compilation reference in `MxApp.kt`.
 - Gradle build not executed in packaging environment; run `./gradlew assembleRelease` to verify.
+
+
+## v4.3.0 — Privacy Hardening & Smart URL
+- Version: 4.3.0 (versionCode 430).
+- Updated `Scripts.kt`: native per-tab, origin-derived seed (kept out of page-readable Web Storage), AudioAnalyser frequency and time-domain perturbation, and no mutation of live AudioBuffer samples.
+- Updated `UrlUtil.kt` and `MainActivity.kt`: safe URL normalization and protocol typo repair; no speculative TLD guessing.
+- Static checks: JavaScript syntax check passed; URL resolver compiled and passed focused cases for bare domains, typo protocols, and search fallback; Manifest XML and ZIP integrity checked.
+- Android Gradle build was attempted but could not start because this environment cannot resolve `services.gradle.org` (UnknownHostException). Build/APK status is unverified.
+- Known limitation: WebRTC may still expose local host candidates on some WebView providers; this release does not claim complete WebRTC leak prevention.

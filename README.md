@@ -107,3 +107,12 @@ chmod +x gradlew
 - Explicitly enable Android BuildConfig generation for AGP 8+.
 - Fixes `Unresolved reference: BuildConfig` in `MxApp.kt`.
 - No runtime behavior or security policy changes.
+
+
+## v4.3.0 — Privacy Hardening & Smart URL
+- Stabilized anti-fingerprinting perturbation with a native per-tab, origin-derived seed across reloads; the seed is not stored in page-readable Web Storage.
+- Expanded AudioAnalyser protection to frequency and time-domain snapshot APIs.
+- Removed mutation of live AudioBuffer channel data to avoid altering real playback.
+- Added safe address-bar protocol repair for common missing/typo HTTPS prefixes.
+- Recognizes explicit domains and adds HTTPS; ambiguous bare words or missing TLDs are sent to the configured search engine rather than guessing `.com`/`.net`.
+- WebRTC local-candidate exposure remains a known limitation requiring dedicated compatibility testing; no claim of complete IP-leak prevention is made.

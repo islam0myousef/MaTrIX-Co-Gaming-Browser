@@ -87,6 +87,9 @@ import kotlin.math.abs
 
 /** تبويب واحد */
 class Tab(var web: WebView, val priv: Boolean, val popup: Boolean) {
+    // Native per-tab seed: survives reloads in this tab, differs in every new tab,
+    // and is not stored in page-readable Web Storage.
+    val privacySeed: Long = (java.security.SecureRandom().nextInt().toLong() and 0xffffffffL).let { if (it == 0L) 1831565813L else it }
     @Volatile var host: String = ""
     @Volatile var url: String = ""
     @Volatile var title: String = ""
@@ -785,12 +788,7 @@ class MainActivity : Activity() {
     }
 
     private fun resolve(input: String): String {
-        val v = input.trim()
-        return when {
-            v.startsWith("https://", true) || v.startsWith("http://", true) -> v
-            v.contains(" ") || (!v.contains(".") && !v.contains(":") && !v.startsWith("localhost")) -> engineUrl() + Uri.encode(v)
-            else -> "http://$v".let { if (Cfg.bool(Cfg.HTTPS_ONLY, true) && !UrlUtil.isIp(v.substringBefore('/').substringBefore(':'))) "https://$v" else it }
-        }
+        return UrlUtil.resolveAddressInput(input, engineUrl(), Cfg.bool(Cfg.HTTPS_ONLY, true))
     }
 
     private fun loadInTab(tab: Tab, input: String) {
@@ -890,7 +888,7 @@ class MainActivity : Activity() {
                 // Install timer virtualization independently from fingerprint protection.
                 androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, Scripts.TIMER_ENGINE, setOf("*"))
                 if (Cfg.bool(Cfg.FP, true)) {
-                    androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, Scripts.HARDEN, setOf("*"))
+                    androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, Scripts.harden(tab.privacySeed), setOf("*"))
                 }
             }
         } catch (error: Throwable) {
@@ -1032,7 +1030,7 @@ class MainActivity : Activity() {
         tab.web.evaluateJavascript(
             Scripts.main(host, tab.skipMode, Cfg.bool(Cfg.DARK, false), yt, on && AdBlocker.adsOn(), on && AdBlocker.annoyOn(), spy, Cfg.bool(Cfg.FP, true), Cfg.bool(Cfg.BGAUDIO, false), pol), null
         )
-        if (Cfg.bool(Cfg.FP, true)) tab.web.evaluateJavascript(Scripts.HARDEN, null)
+        if (Cfg.bool(Cfg.FP, true)) tab.web.evaluateJavascript(Scripts.harden(tab.privacySeed), null)
         if (tab.desktop) tab.web.evaluateJavascript(Scripts.desktopViewport(desktopWidth()), null)
         if (on) {
             io.execute {

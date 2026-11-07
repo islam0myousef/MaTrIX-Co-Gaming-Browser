@@ -552,9 +552,13 @@ try{ Object.defineProperty(window,'__mxH',{value:1}); }catch(e){}
 var W=window, N=navigator;
 function def(o,k,v){ try{ Object.defineProperty(o,k,{get:function(){return v;},configurable:true}); }catch(e){} }
 function kill(o,k){ try{ Object.defineProperty(o,k,{value:undefined,configurable:true,writable:true}); }catch(e){ try{ o[k]=undefined; }catch(e2){} } }
-var seed=0;
-try{ var seedBytes=new Uint32Array(1); W.crypto.getRandomValues(seedBytes); seed=seedBytes[0]>>>0; }catch(e){ seed=(NativeSeedFallback()); }
-function NativeSeedFallback(){ return ((Math.random()*4294967295)>>>0); }
+var tabSeed=(%%SEED%%)>>>0;
+if(!tabSeed) tabSeed=0x6D2B79F5;
+/* Derive an origin-specific seed so the same tab does not reuse identical
+   perturbation patterns across unrelated sites. */
+var originHash=2166136261;
+try{ var origin=String(W.location.origin||W.location.hostname); for(var oi=0;oi<origin.length;oi++){ originHash^=origin.charCodeAt(oi); originHash=Math.imul(originHash,16777619); } }catch(e){}
+var seed=(Math.imul((tabSeed^originHash)>>>0, 2246822519)>>>0)||0x6D2B79F5;
 function mix(n){ n=(n+seed+0x6D2B79F5)|0; n=Math.imul(n^(n>>>15),n|1); n^=n+Math.imul(n^(n>>>7),n|61); return (n^(n>>>14))>>>0; }
 function unitNoise(i){ return mix(i) / 4294967295; }
 var rnd=function(n){ return Math.floor(unitNoise(n+0x51ED270B)*n); };
@@ -649,34 +653,32 @@ try{
   CP.toBlob=function(){ return oTB.apply(noisy(this),arguments); };
 }catch(e){}
 
-/* 7) الصوت: تشويش دقيق في بيانات القنوات والتحليل */
+/* 7) Audio fingerprinting: deterministic, tiny noise on analyser output only.
+   Do not mutate AudioBuffer.getChannelData(): it is live playback data and changing
+   it can alter real sound. Analyser arrays are caller-owned snapshots. */
 try{
-  var AB=W.AudioBuffer&&AudioBuffer.prototype;
-  if(AB){
-    var seen=new WeakSet(), oCD=AB.getChannelData;
-    AB.getChannelData=function(){
-      var d=oCD.apply(this,arguments);
-      try{
-        if(d.length<=200000 && !seen.has(d)){
-          seen.add(d);
-          for(var i=0;i<d.length;i+=37){ d[i]+=(unitNoise(i+401)-0.5)*1e-6; }
-        }
-      }catch(e){}
-      return d;
-    };
-    var oCF=AB.copyFromChannel;
-    if(oCF) AB.copyFromChannel=function(dest){
-      var r=oCF.apply(this,arguments);
-      try{ if(dest&&dest.length<=200000){ for(var i=0;i<dest.length;i+=37){ dest[i]+=(unitNoise(i+401)-0.5)*1e-6; } } }catch(e){}
-      return r;
-    };
-  }
   var AN=W.AnalyserNode&&AnalyserNode.prototype;
   if(AN){
-    var oF=AN.getFloatFrequencyData;
-    if(oF) AN.getFloatFrequencyData=function(a){ oF.apply(this,arguments); try{ for(var i=0;i<a.length;i+=7){ a[i]+=(unitNoise(i+809)-0.5)*1e-4; } }catch(e){} };
-    var oB=AN.getByteFrequencyData;
-    if(oB) AN.getByteFrequencyData=function(a){ oB.apply(this,arguments); try{ for(var i=0;i<a.length;i+=11){ a[i]=Math.max(0,Math.min(255,a[i]+(Math.floor(unitNoise(i+1201)*3)-1))); } }catch(e){} };
+    var oFF=AN.getFloatFrequencyData;
+    if(oFF) AN.getFloatFrequencyData=function(a){
+      oFF.apply(this,arguments);
+      try{ for(var i=0;i<a.length;i+=7){ if(isFinite(a[i])) a[i]+=(unitNoise(i+809)-0.5)*0.002; } }catch(e){}
+    };
+    var oBF=AN.getByteFrequencyData;
+    if(oBF) AN.getByteFrequencyData=function(a){
+      oBF.apply(this,arguments);
+      try{ for(var i=0;i<a.length;i+=11){ a[i]=Math.max(0,Math.min(255,a[i]+(Math.floor(unitNoise(i+1201)*3)-1))); } }catch(e){}
+    };
+    var oFT=AN.getFloatTimeDomainData;
+    if(oFT) AN.getFloatTimeDomainData=function(a){
+      oFT.apply(this,arguments);
+      try{ for(var i=0;i<a.length;i+=13){ if(isFinite(a[i])) a[i]+=(unitNoise(i+1601)-0.5)*0.000002; } }catch(e){}
+    };
+    var oBT=AN.getByteTimeDomainData;
+    if(oBT) AN.getByteTimeDomainData=function(a){
+      oBT.apply(this,arguments);
+      try{ for(var i=0;i<a.length;i+=17){ a[i]=Math.max(0,Math.min(255,a[i]+(Math.floor(unitNoise(i+1901)*3)-1))); } }catch(e){}
+    };
   }
 }catch(e){}
 
@@ -721,6 +723,9 @@ try{
 }catch(e){}
 })();
 """
+
+    /** Build the anti-fingerprinting script with a native per-tab seed. */
+    fun harden(seed: Long): String = HARDEN.replace("%%SEED%%", (seed and 0xffffffffL).toString())
 
     fun main(
         host: String, skipMode: Int, dark: Boolean, youtube: Boolean,
