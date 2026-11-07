@@ -30,6 +30,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.os.Message
 import android.provider.MediaStore
 import android.speech.RecognizerIntent
@@ -308,8 +309,16 @@ class MainActivity : Activity() {
         h.removeCallbacks(ticker)
         if (Cfg.bool(Cfg.BGAUDIO, false) && !isFinishing) {
             try {
-                if (Build.VERSION.SDK_INT >= 26) startForegroundService(Intent(this, AudioService::class.java)) else startService(Intent(this, AudioService::class.java))
-            } catch (_: Exception) {}
+                val serviceIntent = Intent(this, AudioService::class.java)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(serviceIntent)
+                } else {
+                    startService(serviceIntent)
+                }
+            } catch (error: Exception) {
+                Log.w("MaTRIX.AudioService", "Background audio service could not start", error)
+                cur?.web?.onPause()
+            }
         } else cur?.web?.onPause()
         super.onPause()
     }

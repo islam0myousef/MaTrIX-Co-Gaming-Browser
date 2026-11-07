@@ -1,25 +1,28 @@
-# Build and verification status — MaTrIX Co 4.0.0
+# Build and verification status — MaTRIX Co 4.1.0
 
-## Completed static checks
-- AndroidManifest.xml parses as valid XML.
-- app/build.gradle.kts is restored and non-empty.
-- Gradle wrapper targets 8.9 for AGP 8.7.3 compatibility.
-- AndroidX WebKit dependency is declared.
-- Performance Lab routes are wired from the home page, browser menu, and settings.
-- Home page sections, GX wallpaper defaults, Security Center status dashboard, and GX-themed tab manager colors are wired.
-- Storage directory-size scans are cached for 15 seconds and invalidated after cache cleanup.
-- Kotlin parser pass reported no syntax-level `expecting` / unexpected-token errors in the changed Kotlin files.
+## Changes in this maintenance pass
+- AudioService now creates its notification channel and promotes itself to foreground from `onCreate()`; `onStartCommand()` is a defensive fallback.
+- The service declares `mediaPlayback` as its foreground service type and uses the matching manifest permission.
+- Foreground promotion failures are logged and the service stops itself rather than waiting for the system foreground-service timeout.
+- MainActivity logs background audio service startup failures and pauses the active WebView as a fallback.
+- App version metadata is now `versionName = 4.1.0`, `versionCode = 410`; `applicationId` remains `com.matrixco.browser`.
+
+## Static verification
+- AndroidManifest.xml is parsed as XML.
 - ZIP integrity is checked after packaging.
+- Kotlin source changes are inspected for structural consistency.
+- This pass does not claim a successful Android build or runtime verification.
 
 ## Not completed
-- `assembleDebug` could not run in this environment because `services.gradle.org` DNS/network access is unavailable; the Android SDK is also not installed in this environment.
-- No APK installation, runtime UI test, game compatibility test, or dynamic security test has been performed.
+- `assembleDebug` / `assembleRelease` have not been verified in this environment.
+- No APK installation or runtime test has been performed.
+- Background audio behavior still needs device testing on Android 12, including screen-off playback and returning to the browser.
+- Timer/anti-fingerprinting separation, JavaScript bridge hardening, tab lifecycle redesign, and memory/renderer improvements remain planned for subsequent 4.1.x work.
 
-## Build on AndroidIDE / Termux environment with Android SDK
+## Build on AndroidIDE / Termux with Android SDK
 
 ```bash
 chmod +x gradlew
-./gradlew --version
 ./gradlew clean assembleDebug --no-daemon --stacktrace
 ```
 
