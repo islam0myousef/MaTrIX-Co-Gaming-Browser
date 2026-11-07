@@ -2373,7 +2373,7 @@ class MainActivity : Activity() {
         val collectDiagnostic = ui.button("جمع بيانات المحرك", true) {
             val pkg = if (Build.VERSION.SDK_INT >= 26) WebView.getCurrentWebViewPackage() else null
             val docStart = androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)
-            val safeBrowsingFeature = androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.SAFE_BROWSING)
+            val safeBrowsingFeature = androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.SAFE_BROWSING_ENABLE)
             val webMessageFeature = androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.WEB_MESSAGE_LISTENER)
             val base = buildString {
                 appendLine("MaTRIX Co — WebView Diagnostics")
