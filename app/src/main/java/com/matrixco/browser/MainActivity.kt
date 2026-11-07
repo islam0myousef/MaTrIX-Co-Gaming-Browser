@@ -87,7 +87,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.abs
 
 /** تبويب واحد */
-class Tab(val web: WebView, val priv: Boolean, val popup: Boolean) {
+class Tab(var web: WebView, val priv: Boolean, val popup: Boolean) {
     @Volatile var host: String = ""
     @Volatile var url: String = ""
     @Volatile var title: String = ""
@@ -1246,8 +1246,44 @@ class MainActivity : Activity() {
         }
 
         override fun onRenderProcessGone(view: WebView?, detail: android.webkit.RenderProcessGoneDetail?): Boolean {
-            toast("الصفحة وقفت بسبب نقص الذاكرة — اتقفل التبويب")
-            closeSoon(tab)
+            // A WebView whose renderer exited must not be reused. Replace the
+            // WebView instance and restore its last navigable URL instead of
+            // closing the user's tab.
+            val crashedView = view ?: tab.web
+            if (crashedView !== tab.web || !tabs.contains(tab)) return true
+
+            val restoreUrl = (tab.pending ?: crashedView.url ?: tab.url)
+                .takeIf { it.isNotBlank() && it != "about:blank" }
+                ?: Pages.HOME_URL
+
+            try {
+                (crashedView.parent as? ViewGroup)?.removeView(crashedView)
+                crashedView.stopLoading()
+                crashedView.destroy()
+            } catch (error: Exception) {
+                Log.w("MaTRIX.Renderer", "Unable to dispose crashed WebView", error)
+            }
+
+            val replacement = WebView(this@MainActivity)
+            tab.web = replacement
+            configure(tab)
+            webHolder.addView(replacement, 0, FrameLayout.LayoutParams(MATCH, MATCH))
+            replacement.visibility = if (tab === cur) View.VISIBLE else View.GONE
+
+            if (tab === cur) {
+                replacement.onResume()
+                tab.pending = null
+                loadInTab(tab, restoreUrl)
+                applyRendererPriority()
+                toast("تم استرداد التبويب بعد توقف محرك الصفحة")
+            } else {
+                replacement.onPause()
+                tab.pending = restoreUrl
+                toast("تم تجهيز استعادة التبويب عند فتحه")
+            }
+
+            tab.progress = 0
+            if (tab === cur) refreshChrome()
             return true
         }
     }

@@ -1,4 +1,4 @@
-# MaTRIX Co — Gaming Browser 4.1.0
+# MaTRIX Co — Gaming Browser 4.1.1
 
 متصفح Android مبني على WebView مع واجهة GX داكنة، إدارة تبويبات، أدوات ألعاب، وحماية تصفح.
 
@@ -14,6 +14,13 @@ chmod +x gradlew
 الناتج: `app/build/outputs/apk/debug/app-debug.apk`.
 
 لإصدار Release: `./gradlew assembleRelease`. يتم توقيعه تلقائيًا عند توفير المتغيرات `MX_KEYSTORE`, `MX_STORE_PASS`, `MX_KEY_ALIAS`, `MX_KEY_PASS`؛ وإذا لم تتوفر ينتج APK غير موقّع.
+
+## 4.1.1 — Renderer Recovery
+
+- استبدال WebView المتعطل عند خروج Renderer بدل إغلاق التبويب.
+- محاولة استعادة آخر عنوان قابل للتصفح، مع تأجيل استعادة التبويبات الخلفية حتى اختيارها.
+- الحفاظ على إعدادات WebView والجسر والعميل عبر إعادة استخدام مسار `configure`.
+- ترقية رقم الإصدار إلى `4.1.1` ورقم البناء `411`.
 
 ## 4.1.0 — Core Stability (initial maintenance release)\n\n- ترقية AudioService إلى Foreground Service مبكرًا من `onCreate()` لتفادي انتهاء مهلة بدء الخدمة قبل استدعاء `startForeground()`.\n- إضافة قناة إشعارات ثابتة وإشعار تشغيل منخفض الأهمية، مع تحديد نوع الخدمة `mediaPlayback` على Android 10 وما بعده.\n- إيقاف الخدمة بأمان عند فشل الترقية إلى Foreground بدل ترك خدمة بدأت دون حالة Foreground.\n- تسجيل فشل بدء خدمة الصوت في Logcat، وإيقاف معالجة WebView مؤقتًا كمسار احتياطي عند فشل تشغيل الخدمة.\n- توحيد رقم الإصدار إلى `4.1.0` ورقم البناء `410` مع الحفاظ على `applicationId`.\n\n## 4.0.0 — GX Rebuild
 
