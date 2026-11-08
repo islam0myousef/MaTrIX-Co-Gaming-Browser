@@ -1,4 +1,4 @@
-# MaTRIX Co — Gaming Browser 4.5.5
+# MaTRIX Co — Gaming Browser 4.2.0
 
 متصفح Android مبني على WebView مع واجهة GX داكنة، إدارة تبويبات، أدوات ألعاب، وحماية تصفح.
 
@@ -7,25 +7,13 @@
 المتطلبات: JDK 17 أو أحدث، Android SDK Platform 35، Build Tools حديثة، واتصال إنترنت لأول تنزيل للاعتماديات.
 
 ```bash
-chmod +x gradlew build-universal-release.sh
-./build-universal-release.sh
+chmod +x gradlew
+./gradlew assembleDebug
 ```
 
-السكريبت يشغّل `lintRelease` أولًا ثم يبني Release مع استثناء `lintVitalRelease` فقط، ويستخدم AAPT2 المحلي المتاح في AndroidIDE إن وُجد. يحفظ التقرير في `~/matrix-reports/`. الناتج: `app/build/outputs/apk/release/app-release-unsigned.apk`.
+الناتج: `app/build/outputs/apk/debug/app-debug.apk`.
 
-يتم توقيع Release تلقائيًا عند توفير المتغيرات `MX_KEYSTORE`, `MX_STORE_PASS`, `MX_KEY_ALIAS`, `MX_KEY_PASS`؛ وإلا يكون APK غير موقّع ولا يمكن تثبيته كتحديث فوق نسخة موقعة بمفتاح آخر.
-
-## 4.5.5 — Universal Compatibility & Safer Navigation
-
-- Release metadata: `versionName = 4.5.5`, `versionCode = 455`.
-- Universal Android package: no ABI filters or ABI splits are configured; Android selects compatible native components automatically. The current project contains no packaged `.so` native libraries.
-- HTTPS upgrade failure no longer silently falls back to unencrypted HTTP or permanently marks a host as legacy.
-- The browser now asks before trying HTTP after an HTTPS-upgrade failure, explains the risk, and offers one-time or remembered per-site permission.
-- HTTP navigation is allowed for a general-purpose browser; WebView mixed content remains blocked by the browser settings.
-- The in-app updater now refuses to install an update unless GitHub provides a valid SHA-256 digest and the downloaded APK matches it.
-- Release lint analysis is enabled. The supplied build helper runs `lintRelease` and excludes only `lintVitalRelease` from `assembleRelease`.
-- Added `.gitignore` rules for Gradle/build outputs and local signing material; added the referenced ProGuard rules file.
-- Build and physical-device verification must still be completed in AndroidIDE/Termux before calling this release production-verified.
+لإصدار Release: `./gradlew assembleRelease`. يتم توقيعه تلقائيًا عند توفير المتغيرات `MX_KEYSTORE`, `MX_STORE_PASS`, `MX_KEY_ALIAS`, `MX_KEY_PASS`؛ وإذا لم تتوفر ينتج APK غير موقّع.
 
 ## 4.2.0 — Privacy, Security & Gaming Consolidation
 

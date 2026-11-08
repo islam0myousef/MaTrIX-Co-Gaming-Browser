@@ -1076,7 +1076,6 @@ class MainActivity : Activity() {
 
     private val sslOnce = HashSet<String>()
     private var sslDialogOpen = false
-    private var httpFallbackDialogOpen = false
 
     private fun makeClient(tab: Tab) = object : WebViewClient() {
 
@@ -1216,15 +1215,9 @@ class MainActivity : Activity() {
             val up = tab.upgradedFrom
             if (up != null && failing.startsWith("https://") && hostOf(up) == fhost) {
                 tab.upgradedFrom = null
-                h.post {
-                    askHttpFallback(
-                        tab = tab,
-                        host = fhost,
-                        originalUrl = up,
-                        failedUrl = failing,
-                        reason = error?.description?.toString().orEmpty()
-                    )
-                }
+                db.setLegacy(fhost, db.getLegacy(fhost) or 1)
+                view?.loadUrl(up)
+                toast("⚠ الموقع لا يدعم HTTPS — فُتح بدون تشفير")
                 return
             }
             val saved = db.getOfflineByUrl(failing)
@@ -1292,64 +1285,6 @@ class MainActivity : Activity() {
             tab.progress = 0
             if (tab === cur) refreshChrome()
             return true
-        }
-    }
-
-    /**
-     * HTTPS upgrade failures can be caused by a transient network problem, not
-     * only by an HTTP-only server. Never downgrade or remember a legacy host
-     * without an explicit user choice.
-     */
-    private fun askHttpFallback(
-        tab: Tab,
-        host: String,
-        originalUrl: String,
-        failedUrl: String,
-        reason: String
-    ) {
-        if (httpFallbackDialogOpen || !tabs.contains(tab)) return
-        httpFallbackDialogOpen = true
-        var handled = false
-
-        fun showFailurePage() {
-            if (!tabs.contains(tab)) return
-            tab.web.loadUrl(
-                Pages.HOME_URL + "error?u=" + Uri.encode(failedUrl) +
-                    "&m=" + Uri.encode(reason.ifBlank { "تعذر الاتصال عبر HTTPS" })
-            )
-        }
-
-        val dialog = ui.sheet { box, dlg ->
-            box.addView(ui.titleView("⚠ تعذر فتح الاتصال الآمن"))
-            box.addView(
-                ui.infoView(
-                    "$host\\nتعذر فتح الموقع عبر HTTPS. قد لا يدعم الموقع HTTPS، " +
-                        "وقد يكون السبب أيضًا انقطاعًا مؤقتًا في الاتصال. " +
-                        "فتح HTTP يعني أن البيانات قد تُرسل دون تشفير."
-                )
-            )
-            box.addView(ui.button("فتح HTTP هذه المرة فقط", true) {
-                handled = true
-                dlg.dismiss()
-                if (tabs.contains(tab)) tab.web.loadUrl(originalUrl)
-            })
-            box.addView(ui.space(8))
-            box.addView(ui.button("السماح بـ HTTP لهذا الموقع دائمًا", false) {
-                handled = true
-                db.setLegacy(host, db.getLegacy(host) or 1)
-                dlg.dismiss()
-                if (tabs.contains(tab)) tab.web.loadUrl(originalUrl)
-            })
-            box.addView(ui.space(8))
-            box.addView(ui.button("إلغاء والعودة", false) {
-                handled = true
-                dlg.dismiss()
-                showFailurePage()
-            })
-        }
-        dialog.setOnDismissListener {
-            httpFallbackDialogOpen = false
-            if (!handled) showFailurePage()
         }
     }
 

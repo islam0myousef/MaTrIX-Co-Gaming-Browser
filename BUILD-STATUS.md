@@ -1,15 +1,4 @@
-# Build and verification status — MaTRIX Co 4.5.5
-
-## 4.5.5 — Universal Compatibility & Safer Navigation
-- Version: `4.5.5`; `versionCode = 455`.
-- Universal APK configuration: no ABI filters/splits are set; current archive contains no `.so` native libraries.
-- HTTPS-to-HTTP fallback now requires explicit user consent. A one-time fallback does not persist; remembered fallback is stored only after the user selects it.
-- Cleartext HTTP is enabled for normal browser navigation. HTTPS mixed content remains blocked by WebView configuration.
-- Updater requires a valid 64-character SHA-256 digest from GitHub release metadata and verifies the complete downloaded file before installation.
-- Lint is enabled; build helper runs `lintRelease` and skips only `lintVitalRelease` during `assembleRelease`.
-- `.gitignore` excludes build/cache outputs and local signing material.
-- Static checks are performed during packaging. Android Gradle build, APK signing, installation, and physical-device runtime tests are not claimed until completed in the target Android environment.
-
+# Build and verification status — MaTRIX Co 4.2.0
 
 ## 4.2.0 Privacy, Security & Gaming Consolidation
 - Version: `4.2.0`; `versionCode = 420`.

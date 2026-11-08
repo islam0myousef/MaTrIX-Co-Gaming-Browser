@@ -16,8 +16,8 @@ android {
         applicationId = "com.matrixco.browser"
         minSdk = 23
         targetSdk = 28
-        versionCode = 456
-        versionName = "4.5.6"
+        versionCode = 458
+        versionName = "4.5.8"
     }
 
     signingConfigs {
@@ -55,10 +55,6 @@ android {
         resources.excludes += setOf("META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*")
     }
     lint {
-        // Disabled because GitHub Actions runs plain `./gradlew assembleRelease`
-        // (no -x lintVitalRelease flag like the local build-universal-release.sh
-        // script uses), so lintVitalRelease was still running in CI and failing
-        // on the targetSdk=28 ExpiredTargetSdkVersion check every time.
         checkReleaseBuilds = false
         abortOnError = false
     }
