@@ -31,18 +31,18 @@ jobs:
           MX_KEY_ALIAS: ${{ secrets.MX_KEY_ALIAS }}
           MX_KEY_PASS: ${{ secrets.MX_KEY_PASS }}
         run: |
-  chmod +x gradlew
-  for attempt in 1 2 3; do
-    echo "==> Build attempt $attempt"
-    if ./gradlew assembleRelease --no-daemon; then
-      exit 0
-    fi
-    echo "==> Attempt $attempt failed, retrying in 30s (likely a transient Gradle download timeout)"
-    rm -rf ~/.gradle/wrapper/dists/gradle-*-bin/*/gradle-*-bin.zip.part 2>/dev/null || true
-    sleep 30
-  done
-  echo "All 3 attempts failed."
-  exit 1
+          chmod +x gradlew
+          for attempt in 1 2 3; do
+            echo "==> Build attempt $attempt"
+            if ./gradlew assembleRelease --no-daemon; then
+              exit 0
+            fi
+            echo "==> Attempt $attempt failed, retrying in 30s (likely a transient Gradle download timeout)"
+            rm -rf ~/.gradle/wrapper/dists/gradle-*-bin/*/gradle-*-bin.zip.part 2>/dev/null || true
+            sleep 30
+          done
+          echo "All 3 attempts failed."
+          exit 1
       - uses: actions/upload-artifact@v4
         with:
           name: MaTrIX-Co-release-apk
