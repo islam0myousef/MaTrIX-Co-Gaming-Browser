@@ -82,6 +82,8 @@ object Updater {
     }
 
     fun download(ctx: Context, info: Info, onProgress: (Long, Long) -> Unit, cancelled: () -> Boolean): File {
+        val expectedSha256 = info.sha256?.takeIf { it.matches(Regex("[0-9a-fA-F]{64}")) }
+            ?: throw IOException("GitHub لم يوفر بصمة SHA-256 صالحة لهذا التحديث؛ تم إيقاف التثبيت للحماية")
         val dir = File(ctx.filesDir, "update").apply { mkdirs() }
         val part = File(dir, "matrix-update.apk.part")
         val meta = File(dir, "matrix-update.properties")
@@ -152,11 +154,10 @@ object Updater {
             }
             if (part.length() < 100_000L) throw IOException("الملف لم يكتمل أو حجمه غير صالح")
             if (total > 0L && part.length() != total) throw IOException("انقطع الاتصال؛ تم حفظ الملف الجزئي للاستكمال")
-            if (info.sha256 != null) {
-                val actual = md.digest().joinToString("") { "%02x".format(it) }
-                if (!actual.equals(info.sha256, true)) {
-                    part.delete(); meta.delete(); throw IOException("الملف تالف (SHA-256 غير مطابق)")
-                }
+            val actual = md.digest().joinToString("") { "%02x".format(it) }
+            if (!actual.equals(expectedSha256, true)) {
+                part.delete(); meta.delete()
+                throw IOException("الملف تالف (SHA-256 غير مطابق)")
             }
             if (complete.exists()) complete.delete()
             if (!part.renameTo(complete)) { part.copyTo(complete, overwrite = true); part.delete() }

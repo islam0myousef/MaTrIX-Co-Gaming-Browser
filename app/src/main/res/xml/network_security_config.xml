@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <base-config cleartextTrafficPermitted="false">
+    <!-- A browser must be able to open user-requested HTTP sites. HTTPS-to-HTTP
+         downgrade is not automatic: MainActivity asks the user before fallback.
+         WebView mixed content remains blocked by the browser's WebSettings. -->
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>

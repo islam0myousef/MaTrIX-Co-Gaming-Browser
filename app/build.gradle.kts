@@ -16,8 +16,8 @@ android {
         applicationId = "com.matrixco.browser"
         minSdk = 23
         targetSdk = 28
-        versionCode = 452
-        versionName = "4.5.2"
+        versionCode = 455
+        versionName = "4.5.5"
     }
 
     signingConfigs {
@@ -55,8 +55,10 @@ android {
         resources.excludes += setOf("META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*")
     }
     lint {
-        checkReleaseBuilds = false
-        abortOnError = false
+        // Keep normal lint analysis enabled. The release helper runs lintRelease
+        // explicitly and excludes only lintVitalRelease from assembleRelease.
+        checkReleaseBuilds = true
+        abortOnError = true
     }
 }
 

@@ -1076,6 +1076,7 @@ class MainActivity : Activity() {
 
     private val sslOnce = HashSet<String>()
     private var sslDialogOpen = false
+    private var httpFallbackDialogOpen = false
 
     private fun makeClient(tab: Tab) = object : WebViewClient() {
 
@@ -1215,9 +1216,15 @@ class MainActivity : Activity() {
             val up = tab.upgradedFrom
             if (up != null && failing.startsWith("https://") && hostOf(up) == fhost) {
                 tab.upgradedFrom = null
-                db.setLegacy(fhost, db.getLegacy(fhost) or 1)
-                view?.loadUrl(up)
-                toast("⚠ الموقع لا يدعم HTTPS — فُتح بدون تشفير")
+                h.post {
+                    askHttpFallback(
+                        tab = tab,
+                        host = fhost,
+                        originalUrl = up,
+                        failedUrl = failing,
+                        reason = error?.description?.toString().orEmpty()
+                    )
+                }
                 return
             }
             val saved = db.getOfflineByUrl(failing)
@@ -1285,6 +1292,64 @@ class MainActivity : Activity() {
             tab.progress = 0
             if (tab === cur) refreshChrome()
             return true
+        }
+    }
+
+    /**
+     * HTTPS upgrade failures can be caused by a transient network problem, not
+     * only by an HTTP-only server. Never downgrade or remember a legacy host
+     * without an explicit user choice.
+     */
+    private fun askHttpFallback(
+        tab: Tab,
+        host: String,
+        originalUrl: String,
+        failedUrl: String,
+        reason: String
+    ) {
+        if (httpFallbackDialogOpen || !tabs.contains(tab)) return
+        httpFallbackDialogOpen = true
+        var handled = false
+
+        fun showFailurePage() {
+            if (!tabs.contains(tab)) return
+            tab.web.loadUrl(
+                Pages.HOME_URL + "error?u=" + Uri.encode(failedUrl) +
+                    "&m=" + Uri.encode(reason.ifBlank { "تعذر الاتصال عبر HTTPS" })
+            )
+        }
+
+        val dialog = ui.sheet { box, dlg ->
+            box.addView(ui.titleView("⚠ تعذر فتح الاتصال الآمن"))
+            box.addView(
+                ui.infoView(
+                    "$host\\nتعذر فتح الموقع عبر HTTPS. قد لا يدعم الموقع HTTPS، " +
+                        "وقد يكون السبب أيضًا انقطاعًا مؤقتًا في الاتصال. " +
+                        "فتح HTTP يعني أن البيانات قد تُرسل دون تشفير."
+                )
+            )
+            box.addView(ui.button("فتح HTTP هذه المرة فقط", true) {
+                handled = true
+                dlg.dismiss()
+                if (tabs.contains(tab)) tab.web.loadUrl(originalUrl)
+            })
+            box.addView(ui.space(8))
+            box.addView(ui.button("السماح بـ HTTP لهذا الموقع دائمًا", false) {
+                handled = true
+                db.setLegacy(host, db.getLegacy(host) or 1)
+                dlg.dismiss()
+                if (tabs.contains(tab)) tab.web.loadUrl(originalUrl)
+            })
+            box.addView(ui.space(8))
+            box.addView(ui.button("إلغاء والعودة", false) {
+                handled = true
+                dlg.dismiss()
+                showFailurePage()
+            })
+        }
+        dialog.setOnDismissListener {
+            httpFallbackDialogOpen = false
+            if (!handled) showFailurePage()
         }
     }
 
@@ -2348,81 +2413,6 @@ class MainActivity : Activity() {
         col.addView(grid)
         stateValue.textSize = 11f; stateValue.setTextColor(sub); stateValue.setPadding(dp(2), dp(12), dp(2), dp(8))
         col.addView(stateValue)
-
-        val diagnosticValue = TextView(this).apply {
-            textSize = 11f
-            setTextColor(sub)
-            setPadding(dp(12), dp(10), dp(12), dp(10))
-            background = Ui.round(card, dp(14).toFloat())
-            text = "لم يتم جمع بيانات المحرك بعد."
-        }
-        col.addView(TextView(this).apply {
-            text = "WEBVIEW ENGINE AUDIT"
-            textSize = 11f
-            letterSpacing = .10f
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(theme.accent2)
-            setPadding(dp(2), dp(14), dp(2), dp(7))
-        })
-        col.addView(diagnosticValue)
-        var latestDiagnostic = ""
-        val diagnosticActions = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        val collectDiagnostic = ui.button("جمع بيانات المحرك", true) {
-            val pkg = if (Build.VERSION.SDK_INT >= 26) WebView.getCurrentWebViewPackage() else null
-            val docStart = androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)
-            val safeBrowsingFeature = androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.SAFE_BROWSING_ENABLE)
-            val webMessageFeature = androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.WEB_MESSAGE_LISTENER)
-            val base = buildString {
-                appendLine("MaTRIX Co — WebView Diagnostics")
-                appendLine("App version: ${appVersion()}")
-                appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL}")
-                appendLine("Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
-                appendLine("WebView provider: ${pkg?.packageName ?: "Unavailable / API < 26"}")
-                appendLine("WebView version: ${pkg?.versionName ?: "Unavailable"}")
-                appendLine("DOCUMENT_START_SCRIPT: $docStart")
-                appendLine("SAFE_BROWSING feature: $safeBrowsingFeature")
-                appendLine("WEB_MESSAGE_LISTENER feature: $webMessageFeature")
-                appendLine("Open tabs: ${tabs.size}; sleeping: ${tabs.count { it.sleeping }}")
-                appendLine("Gaming mode: $gameMode")
-                appendLine("Privacy protection setting: ${Cfg.bool(Cfg.FP, true)}")
-                appendLine("Safe Browsing setting: ${Cfg.bool(Cfg.SAFEB, true)}")
-                appendLine("Third-party cookies: ${Cfg.bool(Cfg.TPCOOK, false)}")
-                appendLine("Mixed content blocked: ${Cfg.bool(Cfg.MIXED, true)}")
-                appendLine("NOTE: WebGL values exposed to a page may be modified by MaTRIX privacy scripts; this report does not claim raw GPU identity.")
-            }
-            diagnosticValue.text = "جارٍ جمع بيانات الصفحة الحالية..."
-            val active = cur?.web
-            if (active == null) {
-                latestDiagnostic = base + "Page probe: No active WebView"
-                diagnosticValue.text = latestDiagnostic
-            } else {
-                val js = """(function(){try{var c=document.createElement('canvas');var gl=c.getContext('webgl')||c.getContext('experimental-webgl');var w=c.getContext('webgl2');return JSON.stringify({url:location.href,readyState:document.readyState,documentStart:window.__mxDocumentStart===1,hardeningMarker:window.__mxH||null,canvasMarker:window.__mxCanvasProtection||null,canvas2d:!!c.getContext('2d'),webgl:!!gl,webgl2:!!w,offscreenCanvas:typeof OffscreenCanvas!=='undefined',offlineAudio:typeof (window.OfflineAudioContext||window.webkitOfflineAudioContext)!=='undefined',audioContext:typeof (window.AudioContext||window.webkitAudioContext)!=='undefined',permissionsAPI:!!(navigator.permissions&&navigator.permissions.query),hardwareConcurrency:navigator.hardwareConcurrency||null,deviceMemory:navigator.deviceMemory||null})}catch(e){return JSON.stringify({probeError:String(e)})}})()"""
-                active.evaluateJavascript(js) { raw ->
-                    val decoded = try {
-                        val v = org.json.JSONTokener(raw ?: "null").nextValue()
-                        if (v is String) v else (raw ?: "Unavailable")
-                    } catch (_: Throwable) { raw ?: "Unavailable" }
-                    latestDiagnostic = base + "Page probe (current page):\n" + decoded
-                    diagnosticValue.text = latestDiagnostic
-                }
-            }
-        }
-        val copyDiagnostic = ui.button("نسخ التقرير", false) {
-            if (latestDiagnostic.isBlank()) {
-                toast("اجمع بيانات المحرك أولًا")
-            } else {
-                val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-                clipboard.setPrimaryClip(ClipData.newPlainText("MaTRIX WebView Diagnostics", latestDiagnostic))
-                toast("تم نسخ تقرير التشخيص")
-            }
-        }
-        diagnosticActions.addView(collectDiagnostic, LinearLayout.LayoutParams(0, WRAP, 1f).apply { marginEnd = dp(5) })
-        diagnosticActions.addView(copyDiagnostic, LinearLayout.LayoutParams(0, WRAP, 1f).apply { marginStart = dp(5) })
-        col.addView(diagnosticActions, LinearLayout.LayoutParams(MATCH, WRAP).apply { topMargin = dp(8) })
-
         lateinit var refreshMetrics: () -> Unit
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         val sleep = ui.button("تنويم الخلفية", false) { val n = sleepAll(); toast("تم تنويم $n تبويب"); refreshMetrics() }

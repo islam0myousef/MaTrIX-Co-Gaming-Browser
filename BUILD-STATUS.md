@@ -1,4 +1,15 @@
-# Build and verification status — MaTRIX Co 4.2.0
+# Build and verification status — MaTRIX Co 4.5.5
+
+## 4.5.5 — Universal Compatibility & Safer Navigation
+- Version: `4.5.5`; `versionCode = 455`.
+- Universal APK configuration: no ABI filters/splits are set; current archive contains no `.so` native libraries.
+- HTTPS-to-HTTP fallback now requires explicit user consent. A one-time fallback does not persist; remembered fallback is stored only after the user selects it.
+- Cleartext HTTP is enabled for normal browser navigation. HTTPS mixed content remains blocked by WebView configuration.
+- Updater requires a valid 64-character SHA-256 digest from GitHub release metadata and verifies the complete downloaded file before installation.
+- Lint is enabled; build helper runs `lintRelease` and skips only `lintVitalRelease` during `assembleRelease`.
+- `.gitignore` excludes build/cache outputs and local signing material.
+- Static checks are performed during packaging. Android Gradle build, APK signing, installation, and physical-device runtime tests are not claimed until completed in the target Android environment.
+
 
 ## 4.2.0 Privacy, Security & Gaming Consolidation
 - Version: `4.2.0`; `versionCode = 420`.
@@ -134,11 +145,3 @@ Keep a backup before installing over an existing version. Android only permits i
 - `app/src/main/res/drawable-nodpi/matrix_dragon.gif`: user-supplied 498×280, 59-frame dragon animation.
 - `app/build.gradle.kts`: version 4.5.0 / code 450 and Glide 4.16.0.
 - Not yet built or device-tested. Resume depends on the release server supporting byte ranges and stable validators.
-
-
-## v4.5.1 changes (2026-11-07)
-- Diagnostic-only build based on 4.5.0.
-- Performance Lab now reports Android version/device, installed WebView provider and version, AndroidX WebKit feature support, current-tab injection markers, and available browser APIs.
-- Added copyable diagnostic report.
-- No privacy, Canvas, WebGL, networking, or WebView security behavior was intentionally changed.
-- Not built or device-tested in this environment.

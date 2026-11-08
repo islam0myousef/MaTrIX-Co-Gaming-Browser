@@ -1,4 +1,4 @@
-# MaTRIX Co — Gaming Browser 4.2.0
+# MaTRIX Co — Gaming Browser 4.5.5
 
 متصفح Android مبني على WebView مع واجهة GX داكنة، إدارة تبويبات، أدوات ألعاب، وحماية تصفح.
 
@@ -7,13 +7,25 @@
 المتطلبات: JDK 17 أو أحدث، Android SDK Platform 35، Build Tools حديثة، واتصال إنترنت لأول تنزيل للاعتماديات.
 
 ```bash
-chmod +x gradlew
-./gradlew assembleDebug
+chmod +x gradlew build-universal-release.sh
+./build-universal-release.sh
 ```
 
-الناتج: `app/build/outputs/apk/debug/app-debug.apk`.
+السكريبت يشغّل `lintRelease` أولًا ثم يبني Release مع استثناء `lintVitalRelease` فقط، ويستخدم AAPT2 المحلي المتاح في AndroidIDE إن وُجد. يحفظ التقرير في `~/matrix-reports/`. الناتج: `app/build/outputs/apk/release/app-release-unsigned.apk`.
 
-لإصدار Release: `./gradlew assembleRelease`. يتم توقيعه تلقائيًا عند توفير المتغيرات `MX_KEYSTORE`, `MX_STORE_PASS`, `MX_KEY_ALIAS`, `MX_KEY_PASS`؛ وإذا لم تتوفر ينتج APK غير موقّع.
+يتم توقيع Release تلقائيًا عند توفير المتغيرات `MX_KEYSTORE`, `MX_STORE_PASS`, `MX_KEY_ALIAS`, `MX_KEY_PASS`؛ وإلا يكون APK غير موقّع ولا يمكن تثبيته كتحديث فوق نسخة موقعة بمفتاح آخر.
+
+## 4.5.5 — Universal Compatibility & Safer Navigation
+
+- Release metadata: `versionName = 4.5.5`, `versionCode = 455`.
+- Universal Android package: no ABI filters or ABI splits are configured; Android selects compatible native components automatically. The current project contains no packaged `.so` native libraries.
+- HTTPS upgrade failure no longer silently falls back to unencrypted HTTP or permanently marks a host as legacy.
+- The browser now asks before trying HTTP after an HTTPS-upgrade failure, explains the risk, and offers one-time or remembered per-site permission.
+- HTTP navigation is allowed for a general-purpose browser; WebView mixed content remains blocked by the browser settings.
+- The in-app updater now refuses to install an update unless GitHub provides a valid SHA-256 digest and the downloaded APK matches it.
+- Release lint analysis is enabled. The supplied build helper runs `lintRelease` and excludes only `lintVitalRelease` from `assembleRelease`.
+- Added `.gitignore` rules for Gradle/build outputs and local signing material; added the referenced ProGuard rules file.
+- Build and physical-device verification must still be completed in AndroidIDE/Termux before calling this release production-verified.
 
 ## 4.2.0 — Privacy, Security & Gaming Consolidation
 
@@ -154,11 +166,3 @@ chmod +x gradlew
 - Added Glide 4.16.0 for GIF decoding and lifecycle cleanup when the dialog closes.
 - Added resumable APK downloads using HTTP Range / If-Range validators, a persistent `.part` file, and ETag/Last-Modified metadata.
 - Resume depends on server byte-range support; if the host ignores Range or changes the file, the updater safely restarts rather than appending invalid bytes.
-
-
-## v4.5.1 — WebView Audit & Baseline (diagnostic-only)
-- Extends Performance Lab with read-only WebView provider/version and Android runtime diagnostics.
-- Reports runtime support for DOCUMENT_START_SCRIPT, SAFE_BROWSING and WEB_MESSAGE_LISTENER.
-- Probes the currently active page for MaTRIX injection markers and availability of Canvas, WebGL, WebGL2, OffscreenCanvas and Audio APIs.
-- Adds copy-to-clipboard for the diagnostic report.
-- This build does not change Canvas/WebGL protection policy, WebView security settings, or page behavior.
