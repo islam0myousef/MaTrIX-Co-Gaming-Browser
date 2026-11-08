@@ -910,7 +910,10 @@ class MainActivity : Activity() {
     private fun offlineDir() = File(filesDir, "offline")
     private fun isOfflineFile(uri: Uri): Boolean = try { File(uri.path ?: "").canonicalPath.startsWith(offlineDir().canonicalPath) } catch (_: Exception) { false }
 
-    private fun blockedResponse() = WebResourceResponse("text/plain", "utf-8", 403, "Blocked", mapOf("Access-Control-Allow-Origin" to "*"), ByteArrayInputStream(ByteArray(0)))
+    // null InputStream = genuine failed network load (net::ERR_FAILED), not a "successful" HTTP response.
+    // fetch()/XHR .then() only sees a block when the request actually fails — a 200/403 with a body still
+    // resolves normally from JS's point of view, which is why ad-block test sites were scoring ~0%.
+    private fun blockedResponse(): WebResourceResponse = WebResourceResponse("text/plain", "utf-8", null)
 
     private fun adultBlockedResponse(host: String): WebResourceResponse {
         val html = AdultGuard.blockHtml(host, AdultGuard.Verdict(AdultGuard.ADULT, "الموقع في قوائم الحجب", false))

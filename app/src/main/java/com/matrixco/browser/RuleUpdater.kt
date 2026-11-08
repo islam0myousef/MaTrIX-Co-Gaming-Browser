@@ -15,6 +15,7 @@ class LongList {
     private var a = LongArray(4096)
     var n = 0
     fun add(v: Long) { if (n == a.size) a = a.copyOf(n * 2); a[n++] = v }
+    fun appendAllTo(target: LongList) { for (i in 0 until n) target.add(a[i]) }
     fun distinctSorted(): LongArray {
         val c = a.copyOf(n); c.sort()
         var m = 0
@@ -107,33 +108,48 @@ object RuleUpdater {
         return result
     }
 
+    /** مجموعة ثريدز للتحميل المتوازي — القوائم بتتحمّل كلها مع بعض بدل واحدة ورا التانية، فالدرع بيبقى جاهز خلال ثواني بدل دقايق */
+    private val fetchPool = Executors.newFixedThreadPool(6)
+
+    private data class SourceResult(val source: Source, val success: Boolean, val count: Int, val list: LongList, val err: String)
+
     private fun performUpdate(context: Context): UpdateResult {
+        val active = enabledSources()
+        if (active.isEmpty()) return UpdateResult(false, 0, "اختار قايمة واحدة على الأقل")
+
+        val futures = active.map { s ->
+            fetchPool.submit<SourceResult> {
+                val local = LongList()
+                var count = 0
+                val sink: (String) -> Unit = { d -> local.add(Hash.of(d)); count++ }
+                val success = try {
+                    streamLines(s.url) { line ->
+                        when (s.kind) {
+                            Kind.HOSTS -> parseHostsLine(line, sink)
+                            Kind.DOMAINS -> parseDomainLine(line, sink)
+                            Kind.ADBLOCK -> parseAdblockLine(line, sink)
+                        }
+                    }
+                } catch (e: Exception) { lastError = (e.javaClass.simpleName + " " + (e.message ?: "")).take(60); false }
+                SourceResult(s, success, count, local, lastError)
+            }
+        }
+
         val lists = HashMap<Int, LongList>()
         val ok = ArrayList<String>()
         val report = ArrayList<String>()
         var total = 0
-
-        val active = enabledSources()
-        if (active.isEmpty()) return UpdateResult(false, 0, "اختار قايمة واحدة على الأقل")
         val status = ArrayList<String>()
-        for (s in active) {
-            val target = lists.getOrPut(s.cat) { LongList() }
-            var count = 0
-            val sink: (String) -> Unit = { d -> target.add(Hash.of(d)); count++ }
-            val success = streamLines(s.url) { line ->
-                when (s.kind) {
-                    Kind.HOSTS -> parseHostsLine(line, sink)
-                    Kind.DOMAINS -> parseDomainLine(line, sink)
-                    Kind.ADBLOCK -> parseAdblockLine(line, sink)
-                }
-            }
-            if (!success || count < MIN_PER_SOURCE) {
-                status.add(s.id + "=fail:" + (if (!success) lastError else "قليلة ($count)").replace('|', ' ').replace('=', ' '))
-                report.add(s.name + ": فشل")
+        for (f in futures) {
+            val r = try { f.get() } catch (e: Exception) { null } ?: continue
+            if (!r.success || r.count < MIN_PER_SOURCE) {
+                status.add(r.source.id + "=fail:" + (if (!r.success) r.err else "قليلة (${r.count})").replace('|', ' ').replace('=', ' '))
+                report.add(r.source.name + ": فشل")
             } else {
-                ok.add(s.name); total += count
-                status.add(s.id + "=ok:" + count)
-                report.add(s.name + ": " + count)
+                ok.add(r.source.name); total += r.count
+                status.add(r.source.id + "=ok:" + r.count)
+                report.add(r.source.name + ": " + r.count)
+                r.list.appendAllTo(lists.getOrPut(r.source.cat) { LongList() })
             }
         }
 
@@ -161,7 +177,10 @@ object RuleUpdater {
     }
 
     /** قراءة سطر بسطر بدون تحميل الملف كله في الذاكرة */
-    @Volatile internal var lastError: String = ""
+    private val lastErrorTL = ThreadLocal<String>()
+    internal var lastError: String
+        get() = lastErrorTL.get() ?: ""
+        set(v) { lastErrorTL.set(v) }
 
     internal fun streamLines(address: String, maxChars: Int = MAX_CHARS, onLine: (String) -> Unit): Boolean {
         lastError = ""

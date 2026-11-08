@@ -16,8 +16,8 @@ android {
         applicationId = "com.matrixco.browser"
         minSdk = 23
         targetSdk = 28
-        versionCode = 460
-        versionName = "4.6.0"
+        versionCode = 461
+        versionName = "4.6.1"
     }
 
     signingConfigs {
