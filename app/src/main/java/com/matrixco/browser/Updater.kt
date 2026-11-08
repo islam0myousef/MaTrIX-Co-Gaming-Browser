@@ -245,15 +245,26 @@ class UpdateUi(private val a: MainActivity, private val ui: UiKit) {
         fun rounded(color: Int, stroke: Int = Color.TRANSPARENT, radius: Int = 20): GradientDrawable =
             GradientDrawable().apply { setColor(color); cornerRadius = dp(radius).toFloat(); if (stroke != Color.TRANSPARENT) setStroke(dp(1), stroke) }
 
+        // Real colors sampled from reference art: deep navy-violet card (neon "Version Update" dialog),
+        // violet→magenta glow accent (same dialog's glowing geometric number), and the Earth2 teal
+        // progress/brand accent (bright fill on a dark teal track).
+        val navyTop = 0xFF24183C.toInt()
+        val navyBottom = 0xFF0F0917.toInt()
+        val violet = 0xFF3F46B1.toInt()
+        val magenta = 0xFFBF6ED7.toInt()
+        val teal = 0xFF02B099.toInt()
+        val tealDark = 0xFF00433C.toInt()
+        val cyan = 0xFF89C0D5.toInt()
+
         val card = FrameLayout(a).apply {
-            background = rounded(0xFF0D0B18.toInt(), 0xFF7541A1.toInt(), 25)
+            background = rounded(navyTop, (0x4A000000.toInt() or (cyan and 0x00FFFFFF)), 28)
             clipToOutline = true; elevation = dp(18).toFloat()
         }
         val dragon = ImageView(a).apply { scaleType = ImageView.ScaleType.CENTER_CROP; alpha = 0.64f; contentDescription = "MaTRIX animated dragon" }
         card.addView(dragon, FrameLayout.LayoutParams(-1, -1))
         val veil = View(a).apply {
             background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0xB8090712.toInt(), 0xA60D0B1B.toInt(), 0xE60A0914.toInt()))
+                intArrayOf((0xC0000000.toInt() or (navyTop and 0x00FFFFFF)), (0xA8000000.toInt() or (navyTop and 0x00FFFFFF)), (0xEC000000.toInt() or (navyBottom and 0x00FFFFFF))))
         }
         card.addView(veil, FrameLayout.LayoutParams(-1, -1))
         val content = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_LTR; setPadding(dp(20), dp(18), dp(20), dp(18)) }
@@ -261,23 +272,25 @@ class UpdateUi(private val a: MainActivity, private val ui: UiKit) {
 
         val header = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         header.addView(TextView(a).apply {
-            text = "MATRIX  GX  •  SYSTEM UPDATE"; textSize = 10f; letterSpacing = 0.12f
-            setTextColor(0xFFBE85FF.toInt()); typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            text = "  ◆  MATRIX GX  •  SYSTEM UPDATE  "; textSize = 10f; letterSpacing = 0.1f
+            setTextColor(Color.WHITE); typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(violet, magenta)).apply { cornerRadius = dp(20).toFloat() }
+            setPadding(dp(10), dp(5), dp(10), dp(5))
         }, LinearLayout.LayoutParams(0, -2, 1f))
         header.addView(TextView(a).apply {
             text = "×"; textSize = 26f; gravity = Gravity.CENTER; setTextColor(Color.WHITE)
-            background = rounded(0x442D2840, 0x665D4C78, 50)
+            background = rounded(0x442D2840, (0x66000000.toInt() or (cyan and 0x00FFFFFF)), 50)
             setOnClickListener { if (!busy) d.dismiss() else cancelled = true }
-        }, LinearLayout.LayoutParams(dp(34), dp(34)))
+        }, LinearLayout.LayoutParams(dp(34), dp(34)).apply { marginStart = dp(8) })
         content.addView(header)
 
         content.addView(TextView(a).apply {
             text = "UPDATE AVAILABLE"; textSize = 21f; gravity = Gravity.CENTER; setTextColor(Color.WHITE)
-            typeface = Typeface.create("sans-serif-black", Typeface.BOLD); letterSpacing = 0.035f; setPadding(0, dp(15), 0, dp(2))
+            typeface = Typeface.create("sans-serif-black", Typeface.BOLD); letterSpacing = 0.035f; setPadding(0, dp(16), 0, dp(2))
         })
         content.addView(TextView(a).apply {
             text = "${info.version}  •  ${if (info.size > 0) mb(info.size) + " MB" else "NEW VERSION"}"
-            textSize = 13f; gravity = Gravity.CENTER; setTextColor(0xFFC391FF.toInt()); setPadding(0, 0, 0, dp(12))
+            textSize = 13f; gravity = Gravity.CENTER; setTextColor(teal); typeface = Typeface.create("sans-serif-medium", Typeface.BOLD); setPadding(0, 0, 0, dp(12))
         })
         if (info.notes.isNotBlank()) content.addView(TextView(a).apply {
             text = info.notes.trim(); textSize = 12f; setTextColor(0xFFDCD6EB.toInt()); gravity = Gravity.CENTER
@@ -286,14 +299,17 @@ class UpdateUi(private val a: MainActivity, private val ui: UiKit) {
         })
         val status = TextView(a).apply { textSize = 11f; setTextColor(0xFFDCD2F0.toInt()); gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(7)); visibility = View.GONE }
         content.addView(status)
+        val barTrack = rounded(tealDark, radius = 7)
         val bar = ProgressBar(a, null, android.R.attr.progressBarStyleHorizontal).apply {
-            max = 100; progressTintList = android.content.res.ColorStateList.valueOf(0xFFB153FF.toInt())
-            progressBackgroundTintList = android.content.res.ColorStateList.valueOf(0x665E5272); visibility = View.GONE
+            max = 100; progressTintList = android.content.res.ColorStateList.valueOf(teal)
+            progressBackgroundTintList = android.content.res.ColorStateList.valueOf(tealDark)
+            progressDrawable?.let { it.setTint(teal) }
+            background = barTrack; clipToOutline = true; visibility = View.GONE
         }
         content.addView(bar, LinearLayout.LayoutParams(-1, dp(8)))
         val metrics = TextView(a).apply {
             text = "SECURE UPDATE  •  RESUME SUPPORTED"; textSize = 9f; gravity = Gravity.CENTER; letterSpacing = 0.08f
-            setTextColor(0xFF69D3EB.toInt()); setPadding(0, dp(11), 0, dp(3))
+            setTextColor(cyan); setPadding(0, dp(11), 0, dp(3))
         }
         content.addView(metrics)
         val actions = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(13), 0, 0) }
@@ -302,9 +318,9 @@ class UpdateUi(private val a: MainActivity, private val ui: UiKit) {
         fun actionButton(label: String, primary: Boolean, click: () -> Unit) = TextView(a).apply {
             text = label; textSize = 13f; gravity = Gravity.CENTER; typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
             setTextColor(Color.WHITE)
-            background = if (primary) GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-                intArrayOf(0xFF8E3DDE.toInt(), 0xFF4487E2.toInt())).apply { cornerRadius = dp(15).toFloat() }
-                else rounded(0x552A2638, 0x665F5574, 15)
+            background = if (primary) GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                intArrayOf(violet, magenta)).apply { cornerRadius = dp(15).toFloat() }
+                else rounded(0x552A2638, (0x66000000.toInt() or (cyan and 0x00FFFFFF)), 15)
             setPadding(dp(12), dp(13), dp(12), dp(13)); isClickable = true; isFocusable = true; setOnClickListener { click() }
         }
         lateinit var buildButtons: () -> Unit
