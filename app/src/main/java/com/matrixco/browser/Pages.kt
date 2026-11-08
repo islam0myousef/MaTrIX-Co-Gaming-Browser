@@ -180,6 +180,15 @@ button,input{font:inherit}
 .security-hero{padding:18px;border-radius:22px;background:radial-gradient(ellipse at 95% 0%,rgba(210,255,78,.13),transparent 45%),linear-gradient(145deg,#1b2530,#121722);border:1px solid rgba(210,255,78,.2);margin-bottom:12px}.security-hero .state{font-size:10px;letter-spacing:1.8px;font-weight:900;color:var(--lime)}.security-hero h2{font-size:20px;margin:9px 0 5px}.security-hero p{font-size:11px;line-height:1.7;color:#a9b2c7;margin:0}.status-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}.status-card{padding:12px;border:1px solid var(--line);border-radius:15px;background:#171c29;min-width:0}.status-card b{display:block;font-size:12px;margin-bottom:5px}.status-card span{font-size:10px;color:#9ca6bd;line-height:1.5}.status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-left:5px;background:var(--lime);box-shadow:0 0 8px rgba(210,255,78,.45)}.status-dot.off{background:#ff647c;box-shadow:0 0 8px rgba(255,100,124,.35)}
 .bars{display:flex;align-items:flex-end;justify-content:space-between;gap:5px;height:80px}.bars div{flex:1;background:var(--ac);border-radius:4px 4px 1px 1px;min-height:3px;opacity:.85}
 .chip{display:inline-block;padding:3px 9px;border-radius:10px;font-size:10px;font-weight:800;color:#10131b;background:var(--lime)}.small{font-size:11px;color:var(--sb)}
+.clockcard{position:relative;padding:20px 18px 16px;border:1px solid rgba(210,255,78,.16);border-radius:24px;background:radial-gradient(ellipse at 88% 0%,rgba(151,92,255,.2),transparent 48%),radial-gradient(ellipse at 6% 100%,rgba(210,255,78,.07),transparent 40%),linear-gradient(150deg,#141729,#0b0d17 75%);margin-bottom:18px;overflow:hidden;box-shadow:0 14px 36px rgba(0,0,0,.22)}
+.clockcard .cdate{font-size:11px;color:#9aa2b8;letter-spacing:.6px;text-align:center;margin-bottom:3px;font-weight:600}
+.clockcard .ctime{font-size:48px;font-weight:950;text-align:center;letter-spacing:-1.5px;color:#fff;line-height:1.05;text-shadow:0 0 30px rgba(210,255,78,.32);direction:ltr}
+.prow{display:flex;justify-content:space-between;gap:6px;margin-top:16px}
+.prow .p{flex:1;text-align:center;padding:9px 2px;border-radius:14px;border:1px solid var(--line);background:rgba(255,255,255,.035);min-width:0;transition:background .3s}
+.prow .p span{display:block;font-size:9px;color:#9aa2b8;margin-bottom:4px;font-weight:700}
+.prow .p b{display:block;font-size:11px;font-weight:800;color:#fff;direction:ltr}
+.prow .p.on{background:var(--lime);border-color:var(--lime);box-shadow:0 0 14px rgba(210,255,78,.35)}
+.prow .p.on span,.prow .p.on b{color:#11151c}
 canvas#bg,.aur,.wimg{position:fixed;left:0;top:0;width:100%;height:100%;z-index:-1}.aur{background:linear-gradient(135deg,var(--bg),#17152b,var(--bg));background-size:300% 300%;animation:ag 18s ease infinite}@keyframes ag{0%{background-position:0 50%}50%{background-position:100% 50%}100%{background-position:0 50%}}
 .brand b{letter-spacing:1px}.wm,.mt{display:none}
 body.wall .hero{background:radial-gradient(ellipse at 90% 0%,rgba(151,92,255,.26),transparent 50%),linear-gradient(145deg,#171a29,#10121c)}
@@ -282,6 +291,9 @@ body.opera .top{margin-bottom:22px}
         sb.append("<div class=\"hero-title\">PLAY <b>WITHOUT LIMITS</b></div><p class=\"tagline\">تصفح أسرع. تحكم أكبر. خصوصية تحت سيطرتك.</p>")
         sb.append("<form class=\"search\" onsubmit=\"return go()\"><input id=\"q\" placeholder=\"ابحث أو اكتب عنوان الموقع...\" autocomplete=\"off\" autocapitalize=\"off\"><a class=\"b\" href=\"mx://voice\" aria-label=\"بحث صوتي\">⌕</a></form></section>")
 
+        sb.append("<div class=\"clockcard\"><div class=\"cdate\" id=\"cdate\">—</div><div class=\"ctime\" id=\"ctime\">--:--</div>" +
+            "<div class=\"prow\" id=\"prow\"><div class=\"p\"><span>الفجر</span><b>--:--</b></div><div class=\"p\"><span>الظهر</span><b>--:--</b></div><div class=\"p\"><span>العصر</span><b>--:--</b></div><div class=\"p\"><span>المغرب</span><b>--:--</b></div><div class=\"p\"><span>العشاء</span><b>--:--</b></div></div></div>")
+
         sb.append("<div class=\"section\"><div class=\"heading\"><i class=\"bar\"></i> QUICK ACCESS</div><a href=\"mx://addsc\">＋ إضافة اختصار</a></div><div class=\"grid\">")
         val custom = Cfg.str("shortcuts", "").isNotEmpty()
         for ((i, e) in sc.withIndex()) {
@@ -335,6 +347,28 @@ body.opera .top{margin-bottom:22px}
 
         sb.append("<div style=\"text-align:center;padding:22px 0 4px;color:#747e98;font-size:9px;letter-spacing:2px;font-weight:800\">MATRIX CO • BUILT FOR THE NEXT SESSION</div>")
         sb.append("<script>function go(){var v=document.getElementById('q').value.trim();if(v){location.href='mx://go?q='+encodeURIComponent(v);}return false;}function gx(i,b){var l=document.querySelectorAll('.gxlist'),k=document.querySelectorAll('.gx button');for(var j=0;j<l.length;j++){l[j].className='gxlist'+(j==i?' on':'');k[j].className=(j==i?'on':'')}}document.getElementById('q').addEventListener('keydown',function(e){if(e.key==='Escape')this.blur()});</script>")
+        sb.append("<script>(function(){" +
+            "var ctime=document.getElementById('ctime'),cdate=document.getElementById('cdate'),prow=document.getElementById('prow');" +
+            "if(!ctime)return;" +
+            "var days=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];" +
+            "var months=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];" +
+            "var now=new Date();" +
+            "cdate.textContent=days[now.getDay()]+'، '+now.getDate()+' '+months[now.getMonth()];" +
+            "function tick(){var n=new Date();var h=n.getHours(),m=n.getMinutes();ctime.textContent=(h<10?'0':'')+h+':'+(m<10?'0':'')+m;}" +
+            "tick();setInterval(tick,15000);" +
+            "var order=[['Fajr','الفجر'],['Dhuhr','الظهر'],['Asr','العصر'],['Maghrib','المغرب'],['Isha','العشاء']];" +
+            "function render(t){" +
+            "var nowM=now.getHours()*60+now.getMinutes(),nextIdx=-1,best=1e9,mins=order.map(function(o){var p=(t[o[0]]||'00:00').split(':');return (+p[0])*60+(+p[1]);});" +
+            "for(var i=0;i<mins.length;i++){var diff=mins[i]-nowM;if(diff>=0&&diff<best){best=diff;nextIdx=i;}}" +
+            "var html='';for(var i=0;i<order.length;i++){html+='<div class=\\\"p'+(i===nextIdx?' on':'')+'\\\"><span>'+order[i][1]+'</span><b>'+(t[order[i][0]]||'--:--')+'</b></div>';}" +
+            "prow.innerHTML=html;}" +
+            "var key='mx_prayer_'+now.toISOString().slice(0,10);var cached=null;try{cached=localStorage.getItem(key);}catch(e){}" +
+            "if(cached){try{render(JSON.parse(cached));return;}catch(e){}}" +
+            "fetch('https://api.aladhan.com/v1/timingsByAddress?address=Cairo%2CEgypt&method=5').then(function(r){return r.json();}).then(function(j){" +
+            "var t=j.data.timings,clean={};['Fajr','Dhuhr','Asr','Maghrib','Isha'].forEach(function(k){clean[k]=(t[k]||'').split(' ')[0];});" +
+            "try{localStorage.setItem(key,JSON.stringify(clean));}catch(e){}render(clean);" +
+            "}).catch(function(){prow.innerHTML='<div style=\\\"padding:8px;font-size:10px;color:#9aa2b8;text-align:center;width:100%\\\">تعذر تحميل مواقيت الصلاة — تحتاج اتصال بالإنترنت</div>';});" +
+            "})();</script>")
         return page(t, "MaTrIX Co", sb.toString(), if (wall.isEmpty()) "" else "wall" + (if (Cfg.str(Cfg.WALL, "gx") == "gx") " opera" else ""))
     }
 
