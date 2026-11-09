@@ -204,8 +204,8 @@ button,input{font:inherit}
 .nclock::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 85% 75% at center,rgba(0,0,0,var(--scrim,.28)) 0%,transparent 72%);border-radius:28px;z-index:-1}
 .nclock .ndate{font-family:var(--cfont);font-size:14px;letter-spacing:2px;margin-bottom:2px;font-weight:400;opacity:.92}
 .nclock .ntime{font-family:var(--cfont);font-size:76px;font-weight:var(--cweight);letter-spacing:-1px;line-height:1;direction:ltr;margin-bottom:4px;background-clip:text;-webkit-background-clip:text;color:transparent}
-.light-text .nclock .ntime{background-image:linear-gradient(180deg,#fff 0%,#fff 35%,rgba(255,255,255,.52) 100%)}
-.dark-text .nclock .ntime{background-image:linear-gradient(180deg,#141222 0%,#141222 35%,rgba(20,18,34,.52) 100%)}
+.light-text .nclock .ntime{background-image:linear-gradient(180deg,#fff 0%,#fff 35%,rgba(255,255,255,.52) 100%);filter:drop-shadow(0 3px 16px rgba(0,0,0,.5))}
+.dark-text .nclock .ntime{background-image:linear-gradient(180deg,#141222 0%,#141222 35%,rgba(20,18,34,.52) 100%);filter:drop-shadow(0 2px 10px rgba(255,255,255,.35))}
 .nclock .nloc{font-size:10px;opacity:.78;margin-bottom:16px;letter-spacing:.4px;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
 .light-text .nclock,.light-text .nclock .ndate,.light-text .nclock .nloc{color:#fff;text-shadow:0 2px 18px rgba(0,0,0,.55)}
 .dark-text .nclock,.dark-text .nclock .ndate,.dark-text .nclock .nloc{color:#161320;text-shadow:0 1px 10px rgba(255,255,255,.35)}
@@ -443,9 +443,10 @@ body.opera .top{margin-bottom:22px}
             // ---- سطوع الخلفية تلقائي (شغالة مع الرسمة الأصلية أو صورة من المعرض): نرسم على كانفاس صغير ونقيس متوسط الإضاءة ----
             "try{" +
             "function sampleImg(img){try{" +
-            "var cv=document.getElementById('nsample'),cx=cv.getContext('2d');cv.width=6;cv.height=12;cx.drawImage(img,0,0,6,12);" +
-            "var d=cx.getImageData(0,0,6,12).data,sum=0,n=0;" +
-            "for(var i=0;i<d.length;i+=4){sum+=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];n++;}" +
+            // كانفاس طويل (6×24) عشان نقدر نلتقط بس الشريحة اللي الساعة فعليًا واقفة فيها (نص الشاشة تقريبًا)، مش الصورة كلها
+            "var cv=document.getElementById('nsample'),cx=cv.getContext('2d');cv.width=6;cv.height=24;cx.drawImage(img,0,0,6,24);" +
+            "var band=cx.getImageData(0,9,6,8).data,sum=0,n=0;" +
+            "for(var i=0;i<band.length;i+=4){sum+=0.299*band[i]+0.587*band[i+1]+0.114*band[i+2];n++;}" +
             "var avg=sum/n;" +
             "npage.className='page npage '+(avg>140?'dark-text':'light-text');" +
             "npage.style.setProperty('--scrim',Math.min(0.5,Math.max(0.12,(avg/255)*0.55)).toFixed(2));" +
