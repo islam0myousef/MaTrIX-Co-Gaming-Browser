@@ -407,6 +407,9 @@ class MainActivity : Activity() {
             if (req != null && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) startDownload(req.url, req.ua, req.cd, req.mime)
             else if (req != null) toast("لازم تسمح بصلاحية التخزين عشان التحميل")
         }
+        if (requestCode == REQ_LOCATION && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            val t = cur; if (t != null && t.host == Pages.HOST) t.web?.reload()
+        }
     }
 
     // ═════════════════ بناء الواجهة ═════════════════
@@ -1357,6 +1360,13 @@ class MainActivity : Activity() {
         }
 
         override fun onGeolocationPermissionsShowPrompt(origin: String?, callback: android.webkit.GeolocationPermissions.Callback?) {
+            if (origin != null && origin.startsWith("https://" + Pages.HOST)) {
+                val granted = checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                if (granted) { callback?.invoke(origin, true, false); return }
+                requestPermissions(arrayOf(android.Manifest.permission.ACCESS_COARSE_LOCATION), REQ_LOCATION)
+                callback?.invoke(origin, false, false)
+                return
+            }
             callback?.invoke(origin, false, false)
         }
 
@@ -3364,6 +3374,7 @@ class MainActivity : Activity() {
         private const val REQ_VOICE = 4104
         private const val REQ_LOCK = 4105
         private const val REQ_WALL = 4106
+        private const val REQ_LOCATION = 4107
         private const val REQ_PINRESET = 4120
         private const val REQ_BK_EXPORT = 4121
         private const val REQ_BK_IMPORT = 4122
