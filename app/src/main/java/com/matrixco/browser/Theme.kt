@@ -131,4 +131,5 @@ object Cfg {
     const val TABSLEEP = "tab_sleep_min"
     const val GX_PROFILE = "gx_profile"
     const val GX_MOTION = "gx_motion"
+    const val CLOCK_FONT = "clock_font"
 }

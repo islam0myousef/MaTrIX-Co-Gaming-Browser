@@ -560,9 +560,15 @@ class SettingsScreen(
         val cw = Cfg.str(Cfg.WALL, "gx")
         val opts = listOf("gx" to "MaTrIX GX Neon (الافتراضية)", "none" to "بدون", "grid" to "Neon Grid (متحركة)", "embers" to "Embers — جمرات (متحركة)", "matrix" to "Matrix (متحركة)", "aurora" to "Aurora — تدرّج متحرك", "custom" to "صورة من المعرض")
         card(col, opts.map { (k, name) ->
-            radio(name, k == cw, if (k == "custom") "اختار صورة من جهازك" else null) {
+            radio(name, k == cw, if (k == "custom") "هتبقى كمان خلفية صفحة الساعة والطبيعة" else null) {
                 if (k == "custom") a.pickWallpaper() else { Cfg.setStr(Cfg.WALL, k); a.reloadHomeIfShown(); render() }
             }
+        })
+        section(col, "شكل خط الساعة")
+        val cf = Cfg.str(Cfg.CLOCK_FONT, "oswald")
+        val fonts = listOf("oswald" to "Oswald ExtraLight — رفيع وطويل", "teko" to "Teko Light — رفيع مرصوص", "robotoc" to "Roboto Condensed Light", "bebas" to "Bebas Neue — عريض مرصوص", "anton" to "Anton — عريض جدًا", "montserrat" to "Montserrat Thin — أنيق")
+        card(col, fonts.map { (k, name) ->
+            radio(name, k == cf) { Cfg.setStr(Cfg.CLOCK_FONT, k); a.reloadHomeIfShown(); render() }
         })
         section(col, "لون التمييز")
         val colors = listOf(Color.rgb(250, 30, 78), Color.rgb(255, 140, 30), Color.rgb(250, 200, 40), Color.rgb(40, 210, 110), Color.rgb(30, 200, 230), Color.rgb(60, 130, 255), Color.rgb(150, 80, 255), Color.rgb(240, 80, 200))

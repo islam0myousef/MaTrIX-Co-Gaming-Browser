@@ -115,9 +115,21 @@ object Pages {
     private fun fmtTime(ts: Long): String = SimpleDateFormat("dd/MM HH:mm", Locale.US).format(Date(ts))
     private fun hostOf(u: String): String = try { Uri.parse(u).host.orEmpty() } catch (_: Exception) { "" }
 
-    private fun css(t: MxTheme): String = """
-@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@200;300;500&display=swap');
-:root{--bg:${t.bg.hex()};--sf:${t.surface.hex()};--sf2:${t.surface2.hex()};--ac:${t.accent.hex()};--ac2:${t.accent2.hex()};--tx:${t.text.hex()};--sb:${t.sub.hex()};--line:rgba(255,255,255,.09);--glass:rgba(18,21,32,.82);--lime:#d2ff4e;--purple:#975cff;--scrim:0.28}
+    /** خط الساعة المختار من الإعدادات: اسم Google Fonts + عائلة CSS + الوزن المناسب لإحساس كل خط */
+    private fun clockFont(): Triple<String, String, String> = when (Cfg.str(Cfg.CLOCK_FONT, "oswald")) {
+        "teko" -> Triple("Teko:wght@300;400", "Teko", "300")
+        "robotoc" -> Triple("Roboto+Condensed:wght@300;400", "Roboto Condensed", "300")
+        "bebas" -> Triple("Bebas+Neue", "Bebas Neue", "400")
+        "anton" -> Triple("Anton", "Anton", "400")
+        "montserrat" -> Triple("Montserrat:wght@200;300", "Montserrat", "200")
+        else -> Triple("Oswald:wght@200;300;500", "Oswald", "200")
+    }
+
+    private fun css(t: MxTheme): String {
+        val (gf, family, weight) = clockFont()
+        return """
+@import url('https://fonts.googleapis.com/css2?family=${gf}&display=swap');
+:root{--bg:${t.bg.hex()};--sf:${t.surface.hex()};--sf2:${t.surface2.hex()};--ac:${t.accent.hex()};--ac2:${t.accent2.hex()};--tx:${t.text.hex()};--sb:${t.sub.hex()};--line:rgba(255,255,255,.09);--glass:rgba(18,21,32,.82);--lime:#d2ff4e;--purple:#975cff;--scrim:0.28;--cfont:'${family}',system-ui,sans-serif;--cweight:${weight}}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{background:var(--bg);scroll-behavior:smooth}
 body{margin:0 auto;color:var(--tx);font-family:system-ui,Roboto,sans-serif;font-size:14px;padding:18px 16px 48px;max-width:820px;background:var(--bg);min-height:100vh;overflow-x:hidden}
@@ -187,11 +199,11 @@ button,input{font:inherit}
 .npage{position:relative;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden}
 .cpage{padding:18px 16px 48px}
 .nsky{position:absolute;inset:0;z-index:0}
-.nsky svg{width:100%;height:100%;display:block}
+.nsky svg,.nsky img{width:100%;height:100%;display:block;object-fit:cover}
 .nclock{position:relative;z-index:2;text-align:center;padding:26px 18px;width:100%;box-sizing:border-box;transition:color .5s;border-radius:28px}
 .nclock::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 85% 75% at center,rgba(0,0,0,var(--scrim,.28)) 0%,transparent 72%);border-radius:28px;z-index:-1}
-.nclock .ndate{font-family:'Oswald',system-ui,sans-serif;font-size:13px;letter-spacing:2px;margin-bottom:2px;font-weight:300;opacity:.92}
-.nclock .ntime{font-family:'Oswald',system-ui,sans-serif;font-size:72px;font-weight:200;letter-spacing:-1px;line-height:1;direction:ltr;margin-bottom:4px;background-clip:text;-webkit-background-clip:text;color:transparent}
+.nclock .ndate{font-family:var(--cfont);font-size:14px;letter-spacing:2px;margin-bottom:2px;font-weight:400;opacity:.92}
+.nclock .ntime{font-family:var(--cfont);font-size:76px;font-weight:var(--cweight);letter-spacing:-1px;line-height:1;direction:ltr;margin-bottom:4px;background-clip:text;-webkit-background-clip:text;color:transparent}
 .light-text .nclock .ntime{background-image:linear-gradient(180deg,#fff 0%,#fff 35%,rgba(255,255,255,.52) 100%)}
 .dark-text .nclock .ntime{background-image:linear-gradient(180deg,#141222 0%,#141222 35%,rgba(20,18,34,.52) 100%)}
 .nclock .nloc{font-size:10px;opacity:.78;margin-bottom:16px;letter-spacing:.4px;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
@@ -227,6 +239,7 @@ body.opera .top{margin-bottom:22px}
 @media(max-width:360px){body{padding:14px 12px 40px}.hero{padding:23px 15px 17px}.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.hero-title{font-size:30px}.strip{gap:6px}.strip a{padding:11px 5px}.strip b{font-size:15px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
 """
+    }
 
     private fun page(t: MxTheme, title: String, body: String, bodyClass: String = ""): String =
         "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\">" +
@@ -339,8 +352,13 @@ body.opera .top{margin-bottom:22px}
         val quick = db.getBookmarks(5)
         Favicons.ensure(ctx, (sc.map { hostOf(it.url) } + games.map { hostOf(it.url) } + quick.map { hostOf(it.url) }).filter { it.isNotEmpty() })
 
+        val customWallFile = File(ctx.filesDir, "wall.jpg")
+        val hasCustomBg = Cfg.str(Cfg.WALL, "gx") == "custom" && customWallFile.exists()
+        val nskyContent = if (hasCustomBg)
+            "<img src=\"data:image/jpeg;base64," + Base64.encodeToString(customWallFile.readBytes(), Base64.NO_WRAP) + "\" alt=\"\">"
+        else natureSvg()
         sb.append("<div class=\"swipewrap\" id=\"swipewrap\">")
-        sb.append("<div class=\"page npage light-text\" id=\"npage\"><div class=\"nsky\">" + natureSvg() + "</div><canvas id=\"nsample\" width=\"2\" height=\"2\" style=\"display:none\"></canvas>" +
+        sb.append("<div class=\"page npage light-text\" id=\"npage\"><div class=\"nsky\">" + nskyContent + "</div><canvas id=\"nsample\" width=\"2\" height=\"2\" style=\"display:none\"></canvas>" +
             "<div class=\"nhint\" id=\"nhint\">👆 اسحب لعرض باقي المتصفح</div>" +
             "<div class=\"nclock\" id=\"nclock\"><div class=\"ndate\" id=\"ndate\">—</div><div class=\"ntime\" id=\"ntime\">--:--</div><div class=\"nloc\" id=\"nloc\" onclick=\"mxToggleCity()\">📍 تحديد الموقع…</div>" +
             "<div class=\"nprow\" id=\"nprow\"><div class=\"p\"><span>الفجر</span><b>--:--</b></div><div class=\"p\"><span>الظهر</span><b>--:--</b></div><div class=\"p\"><span>العصر</span><b>--:--</b></div><div class=\"p\"><span>المغرب</span><b>--:--</b></div><div class=\"p\"><span>العشاء</span><b>--:--</b></div></div></div>" +
@@ -422,18 +440,21 @@ body.opera .top{margin-bottom:22px}
             "ndate.textContent=days[now.getDay()]+'، '+now.getDate()+' '+months[now.getMonth()];" +
             "function tick(){var n=new Date();var h=n.getHours(),m=n.getMinutes();ntime.textContent=(h<10?'0':'')+h+':'+(m<10?'0':'')+m;}" +
             "tick();setInterval(tick,15000);" +
-            // ---- سطوع الخلفية تلقائي: نرسم الـSVG على كانفاس صغير ونقيس متوسط الإضاءة، ونبدّل لون النص + قوة الظل الخلفي حسبها ----
+            // ---- سطوع الخلفية تلقائي (شغالة مع الرسمة الأصلية أو صورة من المعرض): نرسم على كانفاس صغير ونقيس متوسط الإضاءة ----
             "try{" +
-            "var svgEl=npage.querySelector('svg');var svgStr=new XMLSerializer().serializeToString(svgEl);" +
-            "var svgData='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(svgStr)));" +
-            "var img=new Image();img.onload=function(){try{" +
+            "function sampleImg(img){try{" +
             "var cv=document.getElementById('nsample'),cx=cv.getContext('2d');cv.width=6;cv.height=12;cx.drawImage(img,0,0,6,12);" +
             "var d=cx.getImageData(0,0,6,12).data,sum=0,n=0;" +
             "for(var i=0;i<d.length;i+=4){sum+=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];n++;}" +
             "var avg=sum/n;" +
             "npage.className='page npage '+(avg>140?'dark-text':'light-text');" +
             "npage.style.setProperty('--scrim',Math.min(0.5,Math.max(0.12,(avg/255)*0.55)).toFixed(2));" +
-            "}catch(e){}};img.src=svgData;" +
+            "}catch(e){}}" +
+            "var svgEl=npage.querySelector('.nsky svg'),photoEl=npage.querySelector('.nsky img');" +
+            "if(svgEl){var svgStr=new XMLSerializer().serializeToString(svgEl);" +
+            "var svgData='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(svgStr)));" +
+            "var im=new Image();im.onload=function(){sampleImg(im);};im.src=svgData;" +
+            "}else if(photoEl){if(photoEl.complete)sampleImg(photoEl);else photoEl.onload=function(){sampleImg(photoEl);};}" +
             "}catch(e){}" +
             // ---- مواقيت الصلاة: مدينة يدوية محفوظة أولاً، وإلا GPS، وإلا القاهرة ----
             "var order=[['Fajr','الفجر'],['Dhuhr','الظهر'],['Asr','العصر'],['Maghrib','المغرب'],['Isha','العشاء']];" +
