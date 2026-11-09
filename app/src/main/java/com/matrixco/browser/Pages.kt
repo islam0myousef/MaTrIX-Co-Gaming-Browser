@@ -122,6 +122,7 @@ object Pages {
         "bebas" -> Triple("Bebas+Neue", "Bebas Neue", "400")
         "anton" -> Triple("Anton", "Anton", "400")
         "montserrat" -> Triple("Montserrat:wght@200;300", "Montserrat", "200")
+        "digital" -> Triple("VT323", "VT323", "400")
         else -> Triple("Oswald:wght@200;300;500", "Oswald", "200")
     }
 
@@ -193,10 +194,10 @@ button,input{font:inherit}
 .security-hero{padding:18px;border-radius:22px;background:radial-gradient(ellipse at 95% 0%,rgba(210,255,78,.13),transparent 45%),linear-gradient(145deg,#1b2530,#121722);border:1px solid rgba(210,255,78,.2);margin-bottom:12px}.security-hero .state{font-size:10px;letter-spacing:1.8px;font-weight:900;color:var(--lime)}.security-hero h2{font-size:20px;margin:9px 0 5px}.security-hero p{font-size:11px;line-height:1.7;color:#a9b2c7;margin:0}.status-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}.status-card{padding:12px;border:1px solid var(--line);border-radius:15px;background:#171c29;min-width:0}.status-card b{display:block;font-size:12px;margin-bottom:5px}.status-card span{font-size:10px;color:#9ca6bd;line-height:1.5}.status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-left:5px;background:var(--lime);box-shadow:0 0 8px rgba(210,255,78,.45)}.status-dot.off{background:#ff647c;box-shadow:0 0 8px rgba(255,100,124,.35)}
 .bars{display:flex;align-items:flex-end;justify-content:space-between;gap:5px;height:80px}.bars div{flex:1;background:var(--ac);border-radius:4px 4px 1px 1px;min-height:3px;opacity:.85}
 .chip{display:inline-block;padding:3px 9px;border-radius:10px;font-size:10px;font-weight:800;color:#10131b;background:var(--lime)}.small{font-size:11px;color:var(--sb)}
-.swipewrap{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;width:calc(100% + 32px);margin:-18px -16px -48px;scrollbar-width:none}
+.swipewrap{display:flex;align-items:flex-start;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;width:calc(100% + 32px);margin:-18px -16px -48px;scrollbar-width:none}
 .swipewrap::-webkit-scrollbar{display:none}
-.page{min-width:100%;scroll-snap-align:start;flex-shrink:0;box-sizing:border-box}
-.npage{position:relative;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden}
+.page{min-width:100%;max-width:100%;scroll-snap-align:start;flex-shrink:0;flex-grow:0;box-sizing:border-box}
+.npage{position:relative;height:100vh;height:100svh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden}
 .cpage{padding:18px 16px 48px}
 .nsky{position:absolute;inset:0;z-index:0}
 .nsky svg,.nsky img{width:100%;height:100%;display:block;object-fit:cover}
@@ -243,7 +244,7 @@ body.opera .top{margin-bottom:22px}
 
     private fun page(t: MxTheme, title: String, body: String, bodyClass: String = ""): String =
         "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\">" +
-            "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>" + esc(title) + "</title><style>" + css(t) +
+            "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no\"><title>" + esc(title) + "</title><style>" + css(t) +
             ":root{--acx:" + rgbaStr(t.accent, ".22") + ";--ac2x:" + rgbaStr(t.accent, ".10") + "}</style></head><body class=\"" + bodyClass + "\">" + body + "</body></html>"
 
 
@@ -466,13 +467,20 @@ body.opera .top{margin-bottom:22px}
             "nprow.innerHTML=html;}" +
             "function fromJson(j){var t=j.data.timings,clean={};['Fajr','Dhuhr','Asr','Maghrib','Isha'].forEach(function(k){clean[k]=(t[k]||'').split(' ')[0];});return clean;}" +
             "function showErr(){nprow.innerHTML='<div style=\\\"padding:8px;font-size:10px;width:100%;text-align:center;opacity:.8\\\">تعذر تحميل مواقيت الصلاة — تحتاج اتصال بالإنترنت</div>';}" +
-            "function startByCity(city){" +
+            "function startByCity(city,isRetry){" +
             "nloc.textContent='📍 '+city+' (تعديل)';" +
             "var key='mx_prayer_city_'+now.toISOString().slice(0,10)+'_'+city;" +
             "var cached=null;try{cached=localStorage.getItem(key);}catch(e){}" +
             "if(cached){try{render(JSON.parse(cached));return;}catch(e){}}" +
-            "fetch('https://api.aladhan.com/v1/timingsByAddress?address='+encodeURIComponent(city)+'&method=5')" +
-            ".then(function(r){return r.json();}).then(function(j){var c=fromJson(j);try{localStorage.setItem(key,JSON.stringify(c));}catch(e){}render(c);}).catch(showErr);" +
+            "var q=isRetry?city+', Egypt':city;" +
+            "fetch('https://api.aladhan.com/v1/timingsByAddress?address='+encodeURIComponent(q)+'&method=5')" +
+            ".then(function(r){if(!r.ok)throw 0;return r.json();}).then(function(j){" +
+            "if(j.code!==200||!j.data){throw 0;}" +
+            "var c=fromJson(j);try{localStorage.setItem(key,JSON.stringify(c));}catch(e){}render(c);" +
+            "}).catch(function(){" +
+            "if(!isRetry){startByCity(city,true);}" +
+            "else{nloc.textContent='📍 '+city+' — تعذر إيجاد المدينة، جرّب GPS (تعديل)';startByCoords(30.0444,31.2357,'📍 '+city+' — تعذر إيجاد المدينة، جرّب GPS (تعديل)');}" +
+            "});" +
             "}" +
             "window.mxStartByCity=startByCity;" +
             "function startByCoords(lat,lon,label){" +

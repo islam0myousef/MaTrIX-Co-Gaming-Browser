@@ -566,7 +566,7 @@ class SettingsScreen(
         })
         section(col, "شكل خط الساعة")
         val cf = Cfg.str(Cfg.CLOCK_FONT, "oswald")
-        val fonts = listOf("oswald" to "Oswald ExtraLight — رفيع وطويل", "teko" to "Teko Light — رفيع مرصوص", "robotoc" to "Roboto Condensed Light", "bebas" to "Bebas Neue — عريض مرصوص", "anton" to "Anton — عريض جدًا", "montserrat" to "Montserrat Thin — أنيق")
+        val fonts = listOf("oswald" to "Oswald ExtraLight — رفيع وطويل", "teko" to "Teko Light — رفيع مرصوص", "robotoc" to "Roboto Condensed Light", "bebas" to "Bebas Neue — عريض مرصوص", "anton" to "Anton — عريض جدًا", "montserrat" to "Montserrat Thin — أنيق", "digital" to "VT323 — ساعة ديجيتال / LED حقيقية")
         card(col, fonts.map { (k, name) ->
             radio(name, k == cf) { Cfg.setStr(Cfg.CLOCK_FONT, k); a.reloadHomeIfShown(); render() }
         })
