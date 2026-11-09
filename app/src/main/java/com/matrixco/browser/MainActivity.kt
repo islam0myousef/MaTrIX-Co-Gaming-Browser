@@ -878,6 +878,7 @@ class MainActivity : Activity() {
         s.builtInZoomControls = true
         s.displayZoomControls = false
         s.mixedContentMode = if (Cfg.bool(Cfg.MIXED, true)) WebSettings.MIXED_CONTENT_NEVER_ALLOW else WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+        s.setGeolocationEnabled(true)
         s.userAgentString = baseUa
         s.loadsImagesAutomatically = !Cfg.bool(Cfg.DATASAVER, false)
         if (Build.VERSION.SDK_INT >= 26) s.safeBrowsingEnabled = Cfg.bool(Cfg.SAFEB, true)

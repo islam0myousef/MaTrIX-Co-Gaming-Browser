@@ -116,7 +116,8 @@ object Pages {
     private fun hostOf(u: String): String = try { Uri.parse(u).host.orEmpty() } catch (_: Exception) { "" }
 
     private fun css(t: MxTheme): String = """
-:root{--bg:${t.bg.hex()};--sf:${t.surface.hex()};--sf2:${t.surface2.hex()};--ac:${t.accent.hex()};--ac2:${t.accent2.hex()};--tx:${t.text.hex()};--sb:${t.sub.hex()};--line:rgba(255,255,255,.09);--glass:rgba(18,21,32,.82);--lime:#d2ff4e;--purple:#975cff}
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@200;300;500&display=swap');
+:root{--bg:${t.bg.hex()};--sf:${t.surface.hex()};--sf2:${t.surface2.hex()};--ac:${t.accent.hex()};--ac2:${t.accent2.hex()};--tx:${t.text.hex()};--sb:${t.sub.hex()};--line:rgba(255,255,255,.09);--glass:rgba(18,21,32,.82);--lime:#d2ff4e;--purple:#975cff;--scrim:0.28}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{background:var(--bg);scroll-behavior:smooth}
 body{margin:0 auto;color:var(--tx);font-family:system-ui,Roboto,sans-serif;font-size:14px;padding:18px 16px 48px;max-width:820px;background:var(--bg);min-height:100vh;overflow-x:hidden}
@@ -187,12 +188,21 @@ button,input{font:inherit}
 .cpage{padding:18px 16px 48px}
 .nsky{position:absolute;inset:0;z-index:0}
 .nsky svg{width:100%;height:100%;display:block}
-.nclock{position:relative;z-index:2;text-align:center;padding:0 18px;width:100%;box-sizing:border-box;transition:color .5s}
-.nclock .ndate{font-size:13px;letter-spacing:1px;margin-bottom:4px;font-weight:600;opacity:.92}
-.nclock .ntime{font-size:64px;font-weight:950;letter-spacing:-2px;line-height:1;direction:ltr;margin-bottom:6px}
-.nclock .nloc{font-size:10px;opacity:.75;margin-bottom:16px;letter-spacing:.4px}
-.light-text .nclock,.light-text .nclock *{color:#fff;text-shadow:0 2px 18px rgba(0,0,0,.55)}
-.dark-text .nclock,.dark-text .nclock *{color:#161320;text-shadow:0 1px 10px rgba(255,255,255,.35)}
+.nclock{position:relative;z-index:2;text-align:center;padding:26px 18px;width:100%;box-sizing:border-box;transition:color .5s;border-radius:28px}
+.nclock::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 85% 75% at center,rgba(0,0,0,var(--scrim,.28)) 0%,transparent 72%);border-radius:28px;z-index:-1}
+.nclock .ndate{font-family:'Oswald',system-ui,sans-serif;font-size:13px;letter-spacing:2px;margin-bottom:2px;font-weight:300;opacity:.92}
+.nclock .ntime{font-family:'Oswald',system-ui,sans-serif;font-size:72px;font-weight:200;letter-spacing:-1px;line-height:1;direction:ltr;margin-bottom:4px;background-clip:text;-webkit-background-clip:text;color:transparent}
+.light-text .nclock .ntime{background-image:linear-gradient(180deg,#fff 0%,#fff 35%,rgba(255,255,255,.52) 100%)}
+.dark-text .nclock .ntime{background-image:linear-gradient(180deg,#141222 0%,#141222 35%,rgba(20,18,34,.52) 100%)}
+.nclock .nloc{font-size:10px;opacity:.78;margin-bottom:16px;letter-spacing:.4px;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+.light-text .nclock,.light-text .nclock .ndate,.light-text .nclock .nloc{color:#fff;text-shadow:0 2px 18px rgba(0,0,0,.55)}
+.dark-text .nclock,.dark-text .nclock .ndate,.dark-text .nclock .nloc{color:#161320;text-shadow:0 1px 10px rgba(255,255,255,.35)}
+.ncityform{display:none;position:relative;z-index:2;gap:7px;margin:-8px auto 16px;max-width:280px;padding:0 10px}
+.ncityform.show{display:flex}
+.ncityform input{flex:1;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:12px;padding:9px 11px;font-size:12px;color:#fff;backdrop-filter:blur(6px)}
+.ncityform input::placeholder{color:rgba(255,255,255,.6)}
+.ncityform button{background:var(--lime);color:#11151c;border:none;border-radius:12px;padding:0 13px;font-size:11px;font-weight:800}
+.ncityform .ngps{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25)}
 .nprow{display:flex;justify-content:center;gap:6px;flex-wrap:wrap;max-width:380px;margin:0 auto}
 .nprow .p{flex:1;min-width:58px;text-align:center;padding:9px 4px;border-radius:14px;backdrop-filter:blur(6px);background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14)}
 .light-text .nprow .p span{color:rgba(255,255,255,.72)}
@@ -257,23 +267,27 @@ body.opera .top{margin-bottom:22px}
 
     /** مشهد جبال وسما ليلية — رسم أصلي بالكامل (SVG) زي خلفية "gx" بس أغنى، مفيش صور خارجية فمفيش مشاكل حقوق */
     private fun natureSvg(): String {
+        // viewBox نسبته قريبة من شاشة موبايل حقيقية (400×860) عشان preserveAspectRatio="slice" ميكبّرش
+        // النجوم والتفاصيل بشكل مبالغ فيه زي ما كان بيحصل مع viewBox قصير (260) على شاشة طويلة.
         val stars = StringBuilder()
         val rnd = java.util.Random(7)
-        for (i in 0 until 46) {
-            val x = rnd.nextInt(400); val y = rnd.nextInt(95); val r = 0.4 + rnd.nextDouble() * 1.1
-            val op = 0.25 + rnd.nextDouble() * 0.6
+        for (i in 0 until 70) {
+            val x = rnd.nextInt(400); val y = rnd.nextInt(430); val r = 0.5 + rnd.nextDouble() * 1.0
+            val op = 0.2 + rnd.nextDouble() * 0.55
             stars.append("<circle cx=\"").append(x).append("\" cy=\"").append(y).append("\" r=\"").append(String.format(Locale.US, "%.2f", r))
-                .append("\" fill=\"#fff\" opacity=\"").append(String.format(Locale.US, "%.2f", op)).append("\"/>")
+                .append("\" fill=\"#eafff0\" opacity=\"").append(String.format(Locale.US, "%.2f", op)).append("\"/>")
         }
-        return "<svg viewBox=\"0 0 400 260\" preserveAspectRatio=\"xMidYMax slice\" xmlns=\"http://www.w3.org/2000/svg\">" +
-            "<defs><radialGradient id=\"nsk\" cx=\"78%\" cy=\"10%\" r=\"75%\">" +
-            "<stop offset=\"0%\" stop-color=\"#3a2e63\"/><stop offset=\"45%\" stop-color=\"#241a40\"/><stop offset=\"100%\" stop-color=\"#0a0912\"/></radialGradient>" +
-            "<radialGradient id=\"nmoon\" cx=\"50%\" cy=\"50%\" r=\"50%\"><stop offset=\"0%\" stop-color=\"#eaffd8\" stop-opacity=\".9\"/><stop offset=\"100%\" stop-color=\"#eaffd8\" stop-opacity=\"0\"/></radialGradient></defs>" +
-            "<rect width=\"400\" height=\"260\" fill=\"url(#nsk)\"/>" +
+        return "<svg viewBox=\"0 0 400 860\" preserveAspectRatio=\"xMidYMax slice\" xmlns=\"http://www.w3.org/2000/svg\">" +
+            "<defs><radialGradient id=\"nsk\" cx=\"74%\" cy=\"6%\" r=\"85%\">" +
+            "<stop offset=\"0%\" stop-color=\"#1f433c\"/><stop offset=\"42%\" stop-color=\"#163129\"/><stop offset=\"100%\" stop-color=\"#070f0c\"/></radialGradient>" +
+            "<radialGradient id=\"nmoon\" cx=\"50%\" cy=\"50%\" r=\"50%\"><stop offset=\"0%\" stop-color=\"#eaffe0\" stop-opacity=\".85\"/><stop offset=\"100%\" stop-color=\"#eaffe0\" stop-opacity=\"0\"/></radialGradient>" +
+            "<linearGradient id=\"nground\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0%\" stop-color=\"#0c1a14\"/><stop offset=\"100%\" stop-color=\"#040907\"/></linearGradient></defs>" +
+            "<rect width=\"400\" height=\"860\" fill=\"url(#nsk)\"/>" +
             stars.toString() +
-            "<circle cx=\"312\" cy=\"46\" r=\"52\" fill=\"url(#nmoon)\"/><circle cx=\"312\" cy=\"46\" r=\"15\" fill=\"#f4ffe9\" opacity=\".92\"/>" +
-            "<path d=\"M0 260 L0 150 L55 108 L100 148 L150 92 L205 150 L255 100 L310 148 L360 112 L400 140 L400 260Z\" fill=\"#1c1733\" opacity=\".8\"/>" +
-            "<path d=\"M0 260 L0 185 L70 150 L140 195 L220 140 L300 195 L400 160 L400 260Z\" fill=\"#120f22\"/>" +
+            "<circle cx=\"300\" cy=\"110\" r=\"95\" fill=\"url(#nmoon)\"/><circle cx=\"300\" cy=\"110\" r=\"26\" fill=\"#f2ffe7\" opacity=\".9\"/>" +
+            "<path d=\"M0 520 L0 380 L50 300 L95 365 L150 255 L210 350 L265 275 L320 360 L370 290 L400 330 L400 520Z\" fill=\"#132a22\" opacity=\".85\"/>" +
+            "<path d=\"M0 860 L0 480 L60 400 L130 470 L200 390 L270 465 L340 395 L400 430 L400 860Z\" fill=\"#0b1915\"/>" +
+            "<path d=\"M0 860 L0 600 L400 600 L400 860Z\" fill=\"url(#nground)\"/>" +
             "</svg>"
     }
 
@@ -328,8 +342,9 @@ body.opera .top{margin-bottom:22px}
         sb.append("<div class=\"swipewrap\" id=\"swipewrap\">")
         sb.append("<div class=\"page npage light-text\" id=\"npage\"><div class=\"nsky\">" + natureSvg() + "</div><canvas id=\"nsample\" width=\"2\" height=\"2\" style=\"display:none\"></canvas>" +
             "<div class=\"nhint\" id=\"nhint\">👆 اسحب لعرض باقي المتصفح</div>" +
-            "<div class=\"nclock\" id=\"nclock\"><div class=\"ndate\" id=\"ndate\">—</div><div class=\"ntime\" id=\"ntime\">--:--</div><div class=\"nloc\" id=\"nloc\">📍 تحديد الموقع…</div>" +
+            "<div class=\"nclock\" id=\"nclock\"><div class=\"ndate\" id=\"ndate\">—</div><div class=\"ntime\" id=\"ntime\">--:--</div><div class=\"nloc\" id=\"nloc\" onclick=\"mxToggleCity()\">📍 تحديد الموقع…</div>" +
             "<div class=\"nprow\" id=\"nprow\"><div class=\"p\"><span>الفجر</span><b>--:--</b></div><div class=\"p\"><span>الظهر</span><b>--:--</b></div><div class=\"p\"><span>العصر</span><b>--:--</b></div><div class=\"p\"><span>المغرب</span><b>--:--</b></div><div class=\"p\"><span>العشاء</span><b>--:--</b></div></div></div>" +
+            "<div class=\"ncityform\" id=\"ncityform\"><input id=\"ncityinput\" placeholder=\"اكتب اسم مدينتك...\" autocomplete=\"off\"><button onclick=\"mxSetCity()\">تأكيد</button><button class=\"ngps\" onclick=\"mxUseGps()\">GPS</button></div>" +
             "<div class=\"ndots\"><i class=\"on\"></i><i></i></div></div>")
         sb.append("<div class=\"page cpage\">")
 
@@ -393,6 +408,11 @@ body.opera .top{margin-bottom:22px}
         sb.append("<div style=\"text-align:center;padding:22px 0 4px;color:#747e98;font-size:9px;letter-spacing:2px;font-weight:800\">MATRIX CO • BUILT FOR THE NEXT SESSION</div>")
         sb.append("</div></div>") // close .cpage and .swipewrap
         sb.append("<script>function go(){var v=document.getElementById('q').value.trim();if(v){location.href='mx://go?q='+encodeURIComponent(v);}return false;}function gx(i,b){var l=document.querySelectorAll('.gxlist'),k=document.querySelectorAll('.gx button');for(var j=0;j<l.length;j++){l[j].className='gxlist'+(j==i?' on':'');k[j].className=(j==i?'on':'')}}document.getElementById('q').addEventListener('keydown',function(e){if(e.key==='Escape')this.blur()});</script>")
+        sb.append("<script>" +
+            "function mxToggleCity(){var f=document.getElementById('ncityform');if(f)f.classList.toggle('show');}" +
+            "function mxSetCity(){var i=document.getElementById('ncityinput');var v=i&&i.value.trim();if(!v)return;try{localStorage.setItem('mx_prayer_city',v);}catch(e){}document.getElementById('ncityform').classList.remove('show');if(window.mxStartByCity)window.mxStartByCity(v);}" +
+            "function mxUseGps(){try{localStorage.removeItem('mx_prayer_city');}catch(e){}document.getElementById('ncityform').classList.remove('show');if(window.mxStartByGps)window.mxStartByGps();}" +
+            "</script>")
         sb.append("<script>(function(){" +
             "var ntime=document.getElementById('ntime'),ndate=document.getElementById('ndate'),nprow=document.getElementById('nprow'),nloc=document.getElementById('nloc'),npage=document.getElementById('npage');" +
             "if(!ntime)return;" +
@@ -402,39 +422,54 @@ body.opera .top{margin-bottom:22px}
             "ndate.textContent=days[now.getDay()]+'، '+now.getDate()+' '+months[now.getMonth()];" +
             "function tick(){var n=new Date();var h=n.getHours(),m=n.getMinutes();ntime.textContent=(h<10?'0':'')+h+':'+(m<10?'0':'')+m;}" +
             "tick();setInterval(tick,15000);" +
-            // ---- سطوع الخلفية تلقائي: نرسم الـSVG على كانفاس صغير ونقيس متوسط الإضاءة، ونبدّل لون النص لو الخلفية بقت فاتحة يوماً ما ----
+            // ---- سطوع الخلفية تلقائي: نرسم الـSVG على كانفاس صغير ونقيس متوسط الإضاءة، ونبدّل لون النص + قوة الظل الخلفي حسبها ----
             "try{" +
             "var svgEl=npage.querySelector('svg');var svgStr=new XMLSerializer().serializeToString(svgEl);" +
             "var svgData='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(svgStr)));" +
             "var img=new Image();img.onload=function(){try{" +
-            "var cv=document.getElementById('nsample'),cx=cv.getContext('2d');cx.drawImage(img,0,0,2,2);" +
-            "var d=cx.getImageData(0,0,2,2).data,sum=0,n=0;" +
+            "var cv=document.getElementById('nsample'),cx=cv.getContext('2d');cv.width=6;cv.height=12;cx.drawImage(img,0,0,6,12);" +
+            "var d=cx.getImageData(0,0,6,12).data,sum=0,n=0;" +
             "for(var i=0;i<d.length;i+=4){sum+=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];n++;}" +
-            "npage.className='page npage '+((sum/n)>140?'dark-text':'light-text');" +
+            "var avg=sum/n;" +
+            "npage.className='page npage '+(avg>140?'dark-text':'light-text');" +
+            "npage.style.setProperty('--scrim',Math.min(0.5,Math.max(0.12,(avg/255)*0.55)).toFixed(2));" +
             "}catch(e){}};img.src=svgData;" +
             "}catch(e){}" +
-            // ---- مواقيت الصلاة حسب الـGPS، مع كاش يومي لكل موقع، ورجوع للقاهرة لو الصلاحية مرفوضة ----
+            // ---- مواقيت الصلاة: مدينة يدوية محفوظة أولاً، وإلا GPS، وإلا القاهرة ----
             "var order=[['Fajr','الفجر'],['Dhuhr','الظهر'],['Asr','العصر'],['Maghrib','المغرب'],['Isha','العشاء']];" +
             "function render(t){" +
             "var nowM=now.getHours()*60+now.getMinutes(),nextIdx=-1,best=1e9,mins=order.map(function(o){var p=(t[o[0]]||'00:00').split(':');return (+p[0])*60+(+p[1]);});" +
             "for(var i=0;i<mins.length;i++){var diff=mins[i]-nowM;if(diff>=0&&diff<best){best=diff;nextIdx=i;}}" +
             "var html='';for(var i=0;i<order.length;i++){html+='<div class=\\\"p'+(i===nextIdx?' on':'')+'\\\"><span>'+order[i][1]+'</span><b>'+(t[order[i][0]]||'--:--')+'</b></div>';}" +
             "nprow.innerHTML=html;}" +
-            "function startPrayer(lat,lon,label){" +
+            "function fromJson(j){var t=j.data.timings,clean={};['Fajr','Dhuhr','Asr','Maghrib','Isha'].forEach(function(k){clean[k]=(t[k]||'').split(' ')[0];});return clean;}" +
+            "function showErr(){nprow.innerHTML='<div style=\\\"padding:8px;font-size:10px;width:100%;text-align:center;opacity:.8\\\">تعذر تحميل مواقيت الصلاة — تحتاج اتصال بالإنترنت</div>';}" +
+            "function startByCity(city){" +
+            "nloc.textContent='📍 '+city+' (تعديل)';" +
+            "var key='mx_prayer_city_'+now.toISOString().slice(0,10)+'_'+city;" +
+            "var cached=null;try{cached=localStorage.getItem(key);}catch(e){}" +
+            "if(cached){try{render(JSON.parse(cached));return;}catch(e){}}" +
+            "fetch('https://api.aladhan.com/v1/timingsByAddress?address='+encodeURIComponent(city)+'&method=5')" +
+            ".then(function(r){return r.json();}).then(function(j){var c=fromJson(j);try{localStorage.setItem(key,JSON.stringify(c));}catch(e){}render(c);}).catch(showErr);" +
+            "}" +
+            "window.mxStartByCity=startByCity;" +
+            "function startByCoords(lat,lon,label){" +
             "nloc.textContent=label;" +
             "var key='mx_prayer_'+now.toISOString().slice(0,10)+'_'+lat.toFixed(2)+'_'+lon.toFixed(2);" +
             "var cached=null;try{cached=localStorage.getItem(key);}catch(e){}" +
             "if(cached){try{render(JSON.parse(cached));return;}catch(e){}}" +
             "fetch('https://api.aladhan.com/v1/timings/'+Math.floor(now.getTime()/1000)+'?latitude='+lat+'&longitude='+lon+'&method=5')" +
-            ".then(function(r){return r.json();}).then(function(j){" +
-            "var t=j.data.timings,clean={};['Fajr','Dhuhr','Asr','Maghrib','Isha'].forEach(function(k){clean[k]=(t[k]||'').split(' ')[0];});" +
-            "try{localStorage.setItem(key,JSON.stringify(clean));}catch(e){}render(clean);" +
-            "}).catch(function(){nprow.innerHTML='<div style=\\\"padding:8px;font-size:10px;width:100%;text-align:center;opacity:.8\\\">تعذر تحميل مواقيت الصلاة — تحتاج اتصال بالإنترنت</div>';});" +
+            ".then(function(r){return r.json();}).then(function(j){var c=fromJson(j);try{localStorage.setItem(key,JSON.stringify(c));}catch(e){}render(c);}).catch(showErr);" +
             "}" +
+            "function startByGps(){" +
             "if(navigator.geolocation){" +
-            "navigator.geolocation.getCurrentPosition(function(pos){startPrayer(pos.coords.latitude,pos.coords.longitude,'📍 حسب موقعك الحالي');}," +
-            "function(){startPrayer(30.0444,31.2357,'📍 القاهرة (فعّل صلاحية الموقع لدقة أعلى)');},{timeout:8000,maximumAge:3600000});" +
-            "}else{startPrayer(30.0444,31.2357,'📍 القاهرة (افتراضي)');}" +
+            "navigator.geolocation.getCurrentPosition(function(pos){startByCoords(pos.coords.latitude,pos.coords.longitude,'📍 حسب موقعك الحالي (تعديل)');}," +
+            "function(){startByCoords(30.0444,31.2357,'📍 القاهرة — فعّل GPS الجهاز لدقة أعلى (تعديل)');},{timeout:8000,maximumAge:3600000});" +
+            "}else{startByCoords(30.0444,31.2357,'📍 القاهرة (تعديل)');}" +
+            "}" +
+            "window.mxStartByGps=startByGps;" +
+            "var savedCity=null;try{savedCity=localStorage.getItem('mx_prayer_city');}catch(e){}" +
+            "if(savedCity)startByCity(savedCity);else startByGps();" +
             // ---- نقاط التنقل + تلميح أول مرة ----
             "var wrap=document.getElementById('swipewrap'),dots=document.querySelectorAll('.ndots i'),hint=document.getElementById('nhint');" +
             "if(wrap){wrap.addEventListener('scroll',function(){" +
