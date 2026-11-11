@@ -42,7 +42,7 @@ object RuleUpdater {
     data class Source(val id: String, val name: String, val url: String, val kind: Kind, val cat: Int, val level: Int, val note: String)
 
     val sources: List<Source> = listOf(
-        Source("stevenblack", "StevenBlack", "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts", Kind.HOSTS, Cat.ADS, 1, "إعلانات ومتتبعات — قائمة موحّدة (~80 ألف نطاق)، الأساس"),
+        Source("stevenblack", "StevenBlack", "https://cdn.jsdelivr.net/gh/StevenBlack/hosts@master/hosts", Kind.HOSTS, Cat.ADS, 1, "إعلانات ومتتبعات — قائمة موحّدة (~80 ألف نطاق)، الأساس"),
         Source("pgl", "Peter Lowe", "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext", Kind.HOSTS, Cat.ADS, 1, "إعلانات — خفيفة جدًا (~3 آلاف)"),
         Source("adaway", "AdAway", "https://adaway.org/hosts.txt", Kind.HOSTS, Cat.ADS, 1, "إعلانات الموبايل (~6 آلاف)"),
         Source("oisd", "OISD", "https://big.oisd.nl/domainswild", Kind.DOMAINS, Cat.ADS, 2, "شاملة وقليلة الأخطاء (~200 ألف)"),
@@ -50,13 +50,13 @@ object RuleUpdater {
         Source("easylist", "EasyList", "https://easylist.to/easylist/easylist.txt", Kind.ADBLOCK, Cat.ADS, 2, "قائمة إعلانات الويب الأشهر"),
         Source("easyprivacy", "EasyPrivacy", "https://easylist.to/easylist/easyprivacy.txt", Kind.ADBLOCK, Cat.TRK, 2, "متتبعات وتحليلات"),
         Source("urlhaus", "URLhaus", "https://urlhaus.abuse.ch/downloads/hostfile/", Kind.HOSTS, Cat.MAL, 2, "برمجيات خبيثة (بتتحدث كل ساعة)"),
-        Source("hagezi", "HaGeZi Pro", "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/pro.txt", Kind.HOSTS, Cat.ADS, 3, "قوية وحديثة للإعلانات والتتبع (~150 ألف)"),
+        Source("hagezi", "HaGeZi Pro", "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@main/hosts/pro.txt", Kind.HOSTS, Cat.ADS, 3, "قوية وحديثة للإعلانات والتتبع (~150 ألف)"),
         Source("frogeye", "متتبعات الطرف الأول", "https://hostfiles.frogeye.fr/firstparty-trackers-hosts.txt", Kind.HOSTS, Cat.TRK, 3, "بتكشف المتتبعات المتخفية جوه دومين الموقع نفسه (CNAME)"),
         Source("phishing", "Phishing Army", "https://phishing.army/download/phishing_army_blocklist.txt", Kind.DOMAINS, Cat.MAL, 3, "مواقع التصيد"),
-        Source("nocoin", "NoCoin", "https://raw.githubusercontent.com/hoshsadiq/adblock-nocoin-list/master/nocoin.txt", Kind.ADBLOCK, Cat.MAL, 3, "تعدين العملات الرقمية في الخفاء"),
+        Source("nocoin", "NoCoin", "https://cdn.jsdelivr.net/gh/hoshsadiq/adblock-nocoin-list@master/nocoin.txt", Kind.ADBLOCK, Cat.MAL, 3, "تعدين العملات الرقمية في الخفاء"),
         Source("devdan", "Developer Dan", "https://www.github.developerdan.com/hosts/lists/ads-and-tracking-extended.txt", Kind.HOSTS, Cat.ADS, 3, "إعلانات وتتبع موسّعة"),
         Source("pollock", "Dan Pollock", "https://someonewhocares.org/hosts/zero/hosts", Kind.HOSTS, Cat.ADS, 3, "قائمة شاملة قديمة وموثوقة"),
-        Source("ubo", "uBlock filters", "https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/filters.txt", Kind.ADBLOCK, Cat.ADS, 9, "اختيارية — أغلبها قواعد إخفاء، النطاقات فيها قليلة")
+        Source("ubo", "uBlock filters", "https://cdn.jsdelivr.net/gh/uBlockOrigin/uAssets@master/filters/filters.txt", Kind.ADBLOCK, Cat.ADS, 9, "اختيارية — أغلبها قواعد إخفاء، النطاقات فيها قليلة")
     )
 
     private const val KEY_LEVEL = "bl_level"
