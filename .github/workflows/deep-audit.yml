@@ -1,0 +1,138 @@
+name: Deep Security Audit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Semgrep
+        run: |
+          pip install semgrep
+          semgrep scan --metrics=off --json -o semgrep.json \
+            --config p/security-audit --config p/kotlin --config p/java \
+            --config p/owasp-top-ten --config p/secrets app/src || true
+          {
+            echo "## Semgrep"
+            jq -r '.results[] | "- **\(.extra.severity)** \(.check_id) — `\(.path):\(.start.line)`"' semgrep.json | head -150
+          } >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: mobsfscan
+        run: |
+          pip install mobsfscan
+          mobsfscan --type android --json -o mobsfscan.json . || true
+          {
+            echo "## mobsfscan"
+            jq -r '.results | to_entries[] | "- **\(.value.metadata.severity)** \(.key) — \(.value.files[0].file_path // "?"):\(.value.files[0].match_lines[0] // "?")"' mobsfscan.json | head -100
+          } >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Gitleaks (secrets in code and git history)
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest detect \
+            --source /repo --no-banner --report-format json \
+            --report-path /repo/gitleaks.json || true
+          {
+            echo "## Gitleaks"
+            echo "Secrets found: $(jq 'length' gitleaks.json 2>/dev/null || echo 0)"
+            jq -r '.[] | "- \(.RuleID) — `\(.File):\(.StartLine)` (commit \(.Commit[0:7]))"' gitleaks.json 2>/dev/null | head -50
+          } >> "$GITHUB_STEP_SUMMARY" || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sast-reports
+          path: |
+            semgrep.json
+            mobsfscan.json
+            gitleaks.json
+          if-no-files-found: warn
+
+  browser-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: WebView and browser specific checks
+        run: |
+          F='```'
+          S="$GITHUB_STEP_SUMMARY"
+          echo "# Browser-specific audit" >> "$S"
+          check() {
+            hits=$(grep -rnEI --include=*.kt --include=*.java --include=*.xml "$2" app/src/main 2>/dev/null | head -40)
+            if [ -n "$hits" ]; then
+              { echo "### $1"; echo "$F"; echo "$hits"; echo "$F"; } >> "$S"
+            fi
+          }
+          check "JS bridge (addJavascriptInterface) — high risk if any page can reach it" 'addJavascriptInterface'
+          check "File access from WebView" 'setAllowFileAccess|setAllowFileAccessFromFileURLs|setAllowUniversalAccessFromFileURLs|setAllowContentAccess'
+          check "SSL errors ignored / trust-all" 'onReceivedSslError|handler\.proceed|X509TrustManager|HostnameVerifier|ALLOW_ALL'
+          check "Intent URLs and external launches" 'Intent\.parseUri|intent://|startActivity\('
+          check "WebView remote debugging" 'setWebContentsDebuggingEnabled'
+          check "javascript: and evaluateJavascript injection points" 'evaluateJavascript|loadUrl\("javascript:'
+          check "Runtime code execution / dynamic loading" 'Runtime\.getRuntime|ProcessBuilder|DexClassLoader|PathClassLoader|System\.load'
+          check "SQL built from strings" 'rawQuery|execSQL'
+          check "Weak crypto / insecure random" 'getInstance\("(MD5|SHA-?1|DES)|AES/ECB|java\.util\.Random'
+          check "Sensitive data in logs" 'Log\.(d|v|i)\(|println\('
+          check "World-readable or external storage" 'MODE_WORLD|getExternalStorage|WRITE_EXTERNAL'
+          check "Receivers, PendingIntents, FileProvider" 'registerReceiver|PendingIntent|FileProvider|FLAG_MUTABLE'
+          check "Hardcoded secrets" '(api[_-]?key|secret|token|passw(or)?d)[A-Za-z_]*[[:space:]]*=[[:space:]]*"[^"]{8,}"'
+          check "Manifest: exported, backup, cleartext, debuggable" 'android:exported="true"|allowBackup="true"|usesCleartextTraffic="true"|debuggable="true"'
+          check "mx:// internal commands (should come from internal pages only)" 'mx://|handleMx'
+          echo "Done" >> "$S"
+
+  apk-mobsf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@v3
+      - name: Build debug APK
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: MobSF full static analysis of the APK
+        run: |
+          KEY="ci$(date +%s)"
+          docker run -d --name mobsf -p 8000:8000 -e MOBSF_API_KEY="$KEY" \
+            opensecurity/mobile-security-framework-mobsf:latest
+          for i in $(seq 1 60); do
+            curl -s -o /dev/null http://localhost:8000/ && break
+            sleep 5
+          done
+          APK=$(ls app/build/outputs/apk/debug/*.apk | head -1)
+          HASH=$(curl -s -F "file=@$APK" -H "Authorization: $KEY" http://localhost:8000/api/v1/upload | jq -r .hash)
+          echo "hash=$HASH"
+          curl -s -X POST -H "Authorization: $KEY" --data "hash=$HASH" http://localhost:8000/api/v1/scan -o scan.json
+          curl -s -X POST -H "Authorization: $KEY" --data "hash=$HASH" http://localhost:8000/api/v1/report_json -o mobsf-report.json
+          curl -s -X POST -H "Authorization: $KEY" --data "hash=$HASH" http://localhost:8000/api/v1/download_pdf -o mobsf-report.pdf
+          {
+            echo "## MobSF (debug APK — ignore the 'debuggable' finding, it is a debug build)"
+            echo "Security score: $(jq -r '.appsec.security_score // .security_score // "n/a"' mobsf-report.json)"
+            echo "### High"
+            jq -r '.appsec.high[]? | "- \(.title)"' mobsf-report.json
+            echo "### Warning"
+            jq -r '.appsec.warning[]? | "- \(.title)"' mobsf-report.json | head -60
+          } >> "$GITHUB_STEP_SUMMARY" || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mobsf-apk-report
+          path: |
+            mobsf-report.json
+            mobsf-report.pdf
+          if-no-files-found: warn
