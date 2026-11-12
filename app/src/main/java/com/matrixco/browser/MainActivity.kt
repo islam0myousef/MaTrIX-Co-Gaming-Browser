@@ -896,6 +896,7 @@ class MainActivity : Activity() {
                 // a script before its own JavaScript, rather than via late fallback.
                 androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, "window.__mxDocumentStart=1;", setOf("*"))
                 androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, Scripts.TIMER_ENGINE, setOf("*"))
+                if (AdBlocker.enabled() && AdBlocker.adsOn()) androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, Stealth.DOC_START, setOf("*"))
                 if (Cfg.bool(Cfg.FP, true)) {
                     androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, Scripts.harden(tab.privacySeed), setOf("*"))
                 }
@@ -1042,6 +1043,7 @@ class MainActivity : Activity() {
         // Idempotent fallback for WebView providers without DOCUMENT_START_SCRIPT.
         // When document-start is available this call is a no-op due to __mxTimer.
         tab.web.evaluateJavascript(Scripts.TIMER_ENGINE, null)
+        if (on && AdBlocker.adsOn()) tab.web.evaluateJavascript(Stealth.DOC_START, null)
         // On providers without document-start support this is still a late fallback,
         // but install it before MAIN so later wrappers cannot capture unprotected APIs.
         if (Cfg.bool(Cfg.FP, true)) tab.web.evaluateJavascript(Scripts.harden(tab.privacySeed), null)
@@ -1113,7 +1115,7 @@ class MainActivity : Activity() {
                 tab.blocked.incrementAndGet()
                 AdBlocker.noteBlocked(host, cat)
                 if (cat == Cat.SPY) io.execute { db.addSpyLog(host, tab.host, "known_spy", 95, "حُجب تلقائيًا") }
-                return blockedResponse()
+                return if (cat == Cat.MAL) blockedResponse() else Stealth.response(uri, req.requestHeaders)
             }
             if (videoRegex.containsMatchIn(uri.path.orEmpty() + "?")) addVideo(tab, uri.toString())
             return null

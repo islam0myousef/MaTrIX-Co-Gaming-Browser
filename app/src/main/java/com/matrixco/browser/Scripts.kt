@@ -270,10 +270,16 @@ function clickOne(){
 /* ===== إخفاء الإعلانات + جدار مانع الإعلانات ===== */
 function injectCss(){
   try{
-    if(document.getElementById('__mxcss')) return;
-    var st=document.createElement('style'); st.id='__mxcss';
-    st.textContent=SEL+'{display:none!important;visibility:hidden!important;height:0!important;min-height:0!important;max-height:0!important;pointer-events:none!important}';
-    (document.head||document.documentElement).appendChild(st);
+    if(W.__mxcssOn) return;
+    var css=SEL+'{display:none!important}';
+    if(typeof CSSStyleSheet==='function'&&'adoptedStyleSheets' in document){
+      var sh=new CSSStyleSheet(); sh.replaceSync(css);
+      document.adoptedStyleSheets=Array.prototype.concat.call([],document.adoptedStyleSheets||[],[sh]);
+    }else{
+      var st=document.createElement('style'); st.textContent=css;
+      (document.head||document.documentElement).appendChild(st);
+    }
+    Object.defineProperty(W,'__mxcssOn',{value:1,enumerable:false});
   }catch(e){}
 }
 var WALL=/(ad ?block|ad-?blocker|disable (your )?ad|whitelist (us|this site)|turn off (your )?ad|مانع الإعلانات|حاجب الإعلانات|مانع الاعلانات|عطّل|عطل (مانع|حاجب))/i;
