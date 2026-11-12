@@ -250,6 +250,9 @@ class MainActivity : Activity() {
             }
         }, 4000)
         if (Cfg.bool(Cfg.APPLOCK, false) && savedInstanceState == null) lockApp()
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), REQ_NOTIF)
+        }
         started = true
     }
 
@@ -1105,17 +1108,7 @@ class MainActivity : Activity() {
                 return null
             }
 
-            val accept = req.requestHeaders.entries.firstOrNull { it.key.equals("Accept", true) }?.value.orEmpty().lowercase()
-            val resourceType = when {
-                "text/css" in accept -> "stylesheet"
-                "image/" in accept -> "image"
-                "font/" in accept -> "font"
-                "audio/" in accept || "video/" in accept -> "media"
-                "javascript" in accept || "ecmascript" in accept -> "script"
-                "text/html" in accept -> "subdocument"
-                else -> "xmlhttprequest"
-            }
-            val cat = AdBlocker.check(uri, tab.host, false, resourceType)
+            val cat = AdBlocker.check(uri, tab.host, false)
             if (cat != 0) {
                 tab.blocked.incrementAndGet()
                 AdBlocker.noteBlocked(host, cat)
@@ -3386,6 +3379,7 @@ class MainActivity : Activity() {
         private const val REQ_LOCK = 4105
         private const val REQ_WALL = 4106
         private const val REQ_LOCATION = 4107
+        private const val REQ_NOTIF = 4108
         private const val REQ_PINRESET = 4120
         private const val REQ_BK_EXPORT = 4121
         private const val REQ_BK_IMPORT = 4122

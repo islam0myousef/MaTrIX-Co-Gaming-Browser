@@ -142,24 +142,22 @@ object FilterEngine {
 
     private val bareDomain = Regex("^[a-z0-9][a-z0-9.-]*\\.[a-z]{2,}$")
 
-    private fun parseInto(raw: String, kind: FlKind, bare: Boolean, doms: LongList, cosm: MutableList<Pair<Long, String>>, urlRules: MutableList<String>) {
+    private fun parseInto(raw: String, kind: FlKind, bare: Boolean, doms: LongList, cosm: MutableList<Pair<Long, String>>) {
         if (kind == FlKind.HOSTS) { RuleUpdater.parseHostsLine(raw) { doms.add(Hash.of(it)) }; RuleUpdater.parseDomainLine(raw) { doms.add(Hash.of(it)) }; return }
         val line = raw.trim()
-        if (line.isEmpty() || line[0] == '!' || line[0] == '[') return
+        if (line.isEmpty() || line[0] == '!' || line[0] == '[' || line.startsWith("@@")) return
         if (line.contains("#@#") || line.contains("#?#") || line.contains("#$#") || line.contains("#%#")) return
         val i = line.indexOf("##")
         if (i >= 0) { cosmetic(line, i, cosm); return }
         if (bare && bareDomain.matches(line.lowercase())) { doms.add(Hash.of(line.lowercase())); return }
-        // Keep supported ABP network rules, including URL paths and @@ exceptions.
-        if (NetworkFilterRules.parse(line) != null && urlRules.size < 120000) urlRules.add(line)
-        if (!line.startsWith("@@")) RuleUpdater.parseAdblockLine(line) { doms.add(Hash.of(it)) }
+        RuleUpdater.parseAdblockLine(line) { doms.add(Hash.of(it)) }
     }
 
-    private fun store(ctx: Context, l: FilterList, doms: LongList, cosm: List<Pair<Long, String>>, urlRules: List<String>): Boolean {
+    private fun store(ctx: Context, l: FilterList, doms: LongList, cosm: List<Pair<Long, String>>): Boolean {
         val db = ShieldDatabase.getInstance(ctx)
         val d = doms.distinctSorted()
-        if (!db.flReplace(lid(l.id), l.cat, d, cosm, urlRules)) return false
-        db.setMeta("fl_st_" + l.id, "✓ " + d.size + " نطاق • " + urlRules.size + " قاعدة طلبات • " + cosm.size + " قاعدة إخفاء")
+        if (!db.flReplace(lid(l.id), l.cat, d, cosm)) return false
+        db.setMeta("fl_st_" + l.id, "✓ " + d.size + " نطاق • " + cosm.size + " قاعدة إخفاء")
         genericCache = null
         return true
     }
@@ -168,10 +166,10 @@ object FilterEngine {
         val db = ShieldDatabase.getInstance(ctx)
         var err = ""
         for (url in listOf(l.url) + l.alt) {
-            val doms = LongList(); val cosm = ArrayList<Pair<Long, String>>(); val urlRules = ArrayList<String>()
+            val doms = LongList(); val cosm = ArrayList<Pair<Long, String>>()
             var lines = 0
-            val ok = RuleUpdater.streamLines(url, 80_000_000) { line -> lines++; parseInto(line, l.kind, false, doms, cosm, urlRules) }
-            if (ok && lines >= 5 && (doms.n > 0 || cosm.isNotEmpty() || urlRules.isNotEmpty())) return store(ctx, l, doms, cosm, urlRules)
+            val ok = RuleUpdater.streamLines(url, 80_000_000) { line -> lines++; parseInto(line, l.kind, false, doms, cosm) }
+            if (ok && lines >= 5 && (doms.n > 0 || cosm.isNotEmpty())) return store(ctx, l, doms, cosm)
             err = if (!ok) RuleUpdater.lastError else "القائمة فاضية أو بصيغة مش مدعومة"
         }
         db.setMeta("fl_st_" + l.id, "⚠ فشل التحميل: " + err)
@@ -191,7 +189,7 @@ object FilterEngine {
         if (!loading.add(l.id)) return
         executor.execute {
             val ok = try { load(app, l) } catch (_: Throwable) { false }
-            if (ok) { AdBlocker.refreshRules(app); try { NetworkFilterRules.replace(ShieldDatabase.getInstance(app).flNetworkRules()) } catch (_: Throwable) {} }
+            if (ok) AdBlocker.refreshRules(app)
             loading.remove(l.id)
             main.post { cb(ok) }
         }
@@ -217,7 +215,6 @@ object FilterEngine {
         try { applyCustomRules(ctx) } catch (_: Throwable) {}
         genericCache = null
         AdBlocker.refreshRules(ctx)
-        try { NetworkFilterRules.replace(ShieldDatabase.getInstance(ctx).flNetworkRules()) } catch (_: Throwable) { NetworkFilterRules.replace(emptyList()) }
     }
 
     fun refreshAsync(ctx: Context, cb: (Int, Int) -> Unit) {
@@ -236,12 +233,12 @@ object FilterEngine {
     fun applyCustomRules(ctx: Context): Int {
         val text = Cfg.str(RULES_KEY, "")
         val l = FilterList(RULES_ID, "قواعدك", "", "", 2)
-        val doms = LongList(); val cosm = ArrayList<Pair<Long, String>>(); val urlRules = ArrayList<String>()
-        for (line in text.lines()) parseInto(line, FlKind.ADBLOCK, true, doms, cosm, urlRules)
+        val doms = LongList(); val cosm = ArrayList<Pair<Long, String>>()
+        for (line in text.lines()) parseInto(line, FlKind.ADBLOCK, true, doms, cosm)
         val db = ShieldDatabase.getInstance(ctx)
         if (text.isBlank()) { db.flDelete(lid(RULES_ID)); genericCache = null; return 0 }
-        store(ctx, l, doms, cosm, urlRules)
-        return doms.n + urlRules.size + cosm.size
+        store(ctx, l, doms, cosm)
+        return doms.n + cosm.size
     }
 
     fun applyCustomRulesAsync(ctx: Context, cb: (Int) -> Unit) {
