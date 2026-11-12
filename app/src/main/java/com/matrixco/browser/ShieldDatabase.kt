@@ -32,7 +32,7 @@ object Hash {
 object Cat { const val ADS = 1; const val TRK = 2; const val MAL = 3; const val SOC = 4; const val SPY = 5 }
 
 class ShieldDatabase private constructor(private val ctx: Context) :
-    SQLiteOpenHelper(ctx, "matrix_shield.db", null, 5) {
+    SQLiteOpenHelper(ctx, "matrix_shield.db", null, 6) {
 
     private val lock = Any()
 
@@ -50,6 +50,10 @@ class ShieldDatabase private constructor(private val ctx: Context) :
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         createAll(db)
+        if (oldVersion < 6) {
+            // Force one re-download of enabled ABP lists so URL-pattern rules are populated.
+            db.execSQL("UPDATE shield_meta SET value = '' WHERE key LIKE 'fl_st_%'")
+        }
         if (oldVersion < 3) {
             try {
                 db.execSQL("INSERT OR IGNORE INTO blocked_local(host, cat) SELECT host, 1 FROM blocked_hosts WHERE source <> 'remote'")
@@ -66,6 +70,8 @@ class ShieldDatabase private constructor(private val ctx: Context) :
         db.execSQL("CREATE TABLE IF NOT EXISTS risk_allow (host TEXT PRIMARY KEY)")
         db.execSQL("CREATE TABLE IF NOT EXISTS fl_dom (h INTEGER NOT NULL, l INTEGER NOT NULL, c INTEGER NOT NULL, PRIMARY KEY(h, l)) WITHOUT ROWID")
         db.execSQL("CREATE TABLE IF NOT EXISTS fl_cosm (l INTEGER NOT NULL, h INTEGER NOT NULL, sel TEXT NOT NULL)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS fl_url (l INTEGER NOT NULL, rule TEXT NOT NULL)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS fl_url_l ON fl_url(l)")
         db.execSQL("CREATE INDEX IF NOT EXISTS fl_cosm_h ON fl_cosm(h)")
         db.execSQL("CREATE TABLE IF NOT EXISTS bh (h INTEGER PRIMARY KEY, c INTEGER NOT NULL) WITHOUT ROWID")
         db.execSQL("CREATE TABLE IF NOT EXISTS blocked_local (host TEXT PRIMARY KEY COLLATE NOCASE, cat INTEGER NOT NULL DEFAULT 1)")
@@ -103,18 +109,21 @@ class ShieldDatabase private constructor(private val ctx: Context) :
 
     // ───────────── عوامل تصفية المحتوى ─────────────
 
-    fun flReplace(l: Int, cat: Int, doms: LongArray, cosm: List<Pair<Long, String>>): Boolean = synchronized(lock) {
+    fun flReplace(l: Int, cat: Int, doms: LongArray, cosm: List<Pair<Long, String>>, urlRules: List<String> = emptyList()): Boolean = synchronized(lock) {
         val db = writableDatabase
         try {
             db.beginTransaction()
             try {
-                db.execSQL("DELETE FROM fl_dom WHERE l = $l"); db.execSQL("DELETE FROM fl_cosm WHERE l = $l")
+                db.execSQL("DELETE FROM fl_dom WHERE l = $l"); db.execSQL("DELETE FROM fl_cosm WHERE l = $l"); db.execSQL("DELETE FROM fl_url WHERE l = $l")
                 val st = db.compileStatement("INSERT OR IGNORE INTO fl_dom(h, l, c) VALUES(?, ?, ?)")
                 for (v in doms) { st.clearBindings(); st.bindLong(1, v); st.bindLong(2, l.toLong()); st.bindLong(3, cat.toLong()); st.executeInsert() }
                 st.close()
                 val st2 = db.compileStatement("INSERT INTO fl_cosm(l, h, sel) VALUES(?, ?, ?)")
                 for ((h, sel) in cosm) { st2.clearBindings(); st2.bindLong(1, l.toLong()); st2.bindLong(2, h); st2.bindString(3, sel); st2.executeInsert() }
                 st2.close()
+                val st3 = db.compileStatement("INSERT INTO fl_url(l, rule) VALUES(?, ?)")
+                for (rule in urlRules) { st3.clearBindings(); st3.bindLong(1, l.toLong()); st3.bindString(2, rule); st3.executeInsert() }
+                st3.close()
                 db.setTransactionSuccessful()
             } finally { db.endTransaction() }
             true
@@ -122,8 +131,16 @@ class ShieldDatabase private constructor(private val ctx: Context) :
     }
 
     fun flDelete(l: Int) = synchronized(lock) {
-        try { writableDatabase.execSQL("DELETE FROM fl_dom WHERE l = $l"); writableDatabase.execSQL("DELETE FROM fl_cosm WHERE l = $l") } catch (_: Exception) {}
+        try { writableDatabase.execSQL("DELETE FROM fl_dom WHERE l = $l"); writableDatabase.execSQL("DELETE FROM fl_cosm WHERE l = $l"); writableDatabase.execSQL("DELETE FROM fl_url WHERE l = $l") } catch (_: Exception) {}
         Unit
+    }
+
+    fun flNetworkRules(): List<String> {
+        val out = ArrayList<String>()
+        readableDatabase.rawQuery("SELECT rule FROM fl_url LIMIT 120000", null).use { c ->
+            while (c.moveToNext()) out.add(c.getString(0))
+        }
+        return out
     }
 
     fun flHit(cands: List<String>): Int {

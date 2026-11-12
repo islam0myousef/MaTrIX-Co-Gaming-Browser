@@ -1105,7 +1105,17 @@ class MainActivity : Activity() {
                 return null
             }
 
-            val cat = AdBlocker.check(uri, tab.host, false)
+            val accept = req.requestHeaders.entries.firstOrNull { it.key.equals("Accept", true) }?.value.orEmpty().lowercase()
+            val resourceType = when {
+                "text/css" in accept -> "stylesheet"
+                "image/" in accept -> "image"
+                "font/" in accept -> "font"
+                "audio/" in accept || "video/" in accept -> "media"
+                "javascript" in accept || "ecmascript" in accept -> "script"
+                "text/html" in accept -> "subdocument"
+                else -> "xmlhttprequest"
+            }
+            val cat = AdBlocker.check(uri, tab.host, false, resourceType)
             if (cat != 0) {
                 tab.blocked.incrementAndGet()
                 AdBlocker.noteBlocked(host, cat)

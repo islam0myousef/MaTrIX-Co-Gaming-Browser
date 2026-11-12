@@ -66,6 +66,7 @@ object AdBlocker {
         Cfg.init(context)
         db = ShieldDatabase.getInstance(context)
         reloadAllowed()
+        try { NetworkFilterRules.replace(db?.flNetworkRules().orEmpty()) } catch (_: Throwable) { NetworkFilterRules.replace(emptyList()) }
         synchronized(cache) { cache.clear() }
     }
 
@@ -162,7 +163,7 @@ object AdBlocker {
     }
 
     /** يرجّع تصنيف الحجب لو الطلب لازم يتحجب، وإلا 0 */
-    fun check(uri: Uri, pageHost: String?, mainFrame: Boolean): Int {
+    fun check(uri: Uri, pageHost: String?, mainFrame: Boolean, resourceType: String = "other"): Int {
         if (!enabled() || mainFrame) return 0
         val scheme = uri.scheme?.lowercase(Locale.ROOT)
         if (scheme != "http" && scheme != "https") return 0
@@ -171,6 +172,9 @@ object AdBlocker {
         if (isSiteAllowed(pageHost) || isSiteAllowed(host)) return 0
 
         val third = isThirdParty(host, pageHost)
+        val ruleDecision = NetworkFilterRules.decision(uri, pageHost, resourceType, third)
+        if (ruleDecision < 0) return 0
+        if (ruleDecision > 0 && adsOn()) return Cat.ADS
         val cat = categoryOf(host)
         if (cat != 0 && catOn(cat, third)) return cat
 
