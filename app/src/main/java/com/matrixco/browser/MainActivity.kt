@@ -1518,6 +1518,7 @@ class MainActivity : Activity() {
             "performance" -> showPerformanceLab()
             "tabs" -> showTabs()
             "shield" -> showShield()
+            "ironsettings" -> openSettings("iron")
             "storage" -> openInternal("/storage")
             "cleancache" -> cleanCacheNow(tab)
             "voice" -> startVoice()

@@ -144,6 +144,7 @@ object IronGuard {
             "<body style='margin:0;background:#1a1214;color:#f3e6e6;font-family:sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;text-align:center;direction:rtl'>" +
             "<div style='padding:28px;max-width:420px'><div style='font-size:56px'>🛡️</div><h2>الجدار الحديدي منع الصفحة دي</h2>" +
             "<p style='color:#c9a9a9;line-height:1.9'>$esc<br><b>السبب:</b> $why<br>درجة الخطر: ${v.score}/100</p>" +
-            "<p style='color:#8f7676;font-size:13px;line-height:1.8'>لو الموقع سليم تقدر تضيفه يدويًا من الإعدادات ← الجدار الحديدي ← القائمة البيضاء.</p></div></body></html>"
+            "<p style='color:#8f7676;font-size:13px;line-height:1.8'>لو الموقع سليم تقدر تضيفه يدويًا من الإعدادات ← الجدار الحديدي ← القائمة البيضاء.</p>" +
+            "<a href='mx://ironsettings' style='display:inline-block;margin-top:8px;padding:12px 22px;border-radius:14px;background:#3b2a2e;color:#ffd9d9;text-decoration:none;font-size:15px;font-weight:bold'>🛡️ اضغط هنا للدخول على إعدادات الجدار الحديدي</a></div></body></html>"
     }
 }
