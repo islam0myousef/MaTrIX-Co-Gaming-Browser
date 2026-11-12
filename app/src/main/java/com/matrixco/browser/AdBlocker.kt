@@ -175,10 +175,10 @@ object AdBlocker {
         if (cat != 0 && catOn(cat, third)) return cat
 
         if (adsOn()) {
-            if (third && adHostRegex.containsMatchIn(host)) return Cat.ADS
+            if (adHostRegex.containsMatchIn(host)) return Cat.ADS
             val full = uri.toString().lowercase(Locale.ROOT)
             if (annoyOn()) for (p in antiAdblock) if (full.contains(p)) return Cat.ADS
-            if (third) for (p in adPatterns) if (full.contains(p)) return Cat.ADS
+            for (p in adPatterns) if (full.contains(p)) return Cat.ADS
         }
         return 0
     }
