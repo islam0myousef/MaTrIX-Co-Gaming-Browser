@@ -1,0 +1,44 @@
+name: Security Scan
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mobsfscan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run mobsfscan
+        run: |
+          pip install mobsfscan
+          mobsfscan --type android --json -o mobsfscan-report.json . || true
+          mobsfscan --type android . || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mobsfscan-report
+          path: mobsfscan-report.json
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@v3
+      - name: Run lint
+        run: |
+          chmod +x ./gradlew
+          ./gradlew lintDebug --no-daemon || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: app/build/reports/lint-results-debug.*
+          if-no-files-found: warn
