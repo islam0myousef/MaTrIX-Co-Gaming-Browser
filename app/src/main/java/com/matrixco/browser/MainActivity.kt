@@ -1172,7 +1172,13 @@ class MainActivity : Activity() {
             val req = request ?: return false
             val uri = req.url
             when (uri.scheme.orEmpty().lowercase()) {
-                "mx" -> { handleMx(tab, uri); return true }
+                "mx" -> {
+                    // أوامر mx:// بتتنفّذ بس لو جاية من صفحات التطبيق الداخلية — أي موقع خارجي بيتجاهل
+                    val src = view?.url.orEmpty()
+                    val trusted = src.startsWith("https://" + Pages.HOST) || src.startsWith("https://mx.blocked")
+                    if (trusted) handleMx(tab, uri)
+                    return true
+                }
                 "http" -> {
                     val smart = smartUrl(tab, uri.toString())
                     if (smart != uri.toString()) { view?.loadUrl(smart); return true }
