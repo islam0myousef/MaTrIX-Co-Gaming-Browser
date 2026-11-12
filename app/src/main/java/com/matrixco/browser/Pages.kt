@@ -111,6 +111,9 @@ object Pages {
     )
     val defaultGames = listOf(Entry("Conquer Online", "https://browser.playconqueronline.com/"))
 
+    /** بيسمح بروابط http/https بس — بيمنع javascript: و file: و data: وغيرها */
+    fun isWebUrl(u: String) = u.startsWith("http://", true) || u.startsWith("https://", true)
+
     fun esc(s: String): String = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;")
     private fun fmtTime(ts: Long): String = SimpleDateFormat("dd/MM HH:mm", Locale.US).format(Date(ts))
     private fun hostOf(u: String): String = try { Uri.parse(u).host.orEmpty() } catch (_: Exception) { "" }
@@ -607,13 +610,15 @@ body.opera .top{margin-bottom:22px}
 
     private fun error(ctx: Context, db: ShieldDatabase, t: MxTheme, url: String, msg: String): String {
         val saved = if (url.isNotEmpty()) db.getOfflineByUrl(url) else null
+        val safe = isWebUrl(url)
         val sb = StringBuilder()
         sb.append("<div class=\"empty\" style=\"padding-top:70px\"><div style=\"font-size:48px\">📡</div><h2 style=\"font-weight:600\">تعذر فتح الصفحة</h2>")
         sb.append("<div style=\"direction:ltr;word-break:break-all;font-size:12px\">").append(esc(url)).append("</div>")
         if (msg.isNotEmpty()) sb.append("<p>").append(esc(msg)).append("</p>")
-        sb.append("<a class=\"btn\" href=\"").append(esc(url)).append("\">إعادة المحاولة</a>")
+        if (safe) sb.append("<a class=\"btn\" href=\"").append(esc(url)).append("\">إعادة المحاولة</a>")
         if (saved != null) sb.append("<a class=\"btn alt\" href=\"mx://openoff?id=").append(saved.id).append("\">النسخة المحفوظة</a>")
-        sb.append("<a class=\"btn alt\" href=\"mx://legacy?u=").append(Uri.encode(url)).append("\">وضع التوافق القديم</a></div>")
+        if (safe) sb.append("<a class=\"btn alt\" href=\"mx://legacy?u=").append(Uri.encode(url)).append("\">وضع التوافق القديم</a>")
+        sb.append("</div>")
         return page(t, "خطأ", sb.toString())
     }
 
@@ -622,7 +627,7 @@ body.opera .top{margin-bottom:22px}
         sb.append("<div class=\"empty\" style=\"padding-top:60px\"><div style=\"font-size:54px\">⛔</div><h2 style=\"color:#F28B82;font-weight:600\">موقع خطير</h2>")
         sb.append("<p>الدرع رصد إن الموقع ده في قوائم البرمجيات الخبيثة أو التصيّد. ننصحك بعدم المتابعة.</p>")
         sb.append("<div style=\"direction:ltr;word-break:break-all;font-size:12px\">").append(esc(url)).append("</div><br>")
-        sb.append("<a class=\"btn\" href=\"mx://back\">رجوع للأمان</a><a class=\"btn alt\" href=\"mx://proceed?u=").append(Uri.encode(url)).append("\">أفهم المخاطر، تابع</a></div>")
+        sb.append("<a class=\"btn\" href=\"mx://back\">رجوع للأمان</a>").append(if (isWebUrl(url)) "<a class=\"btn alt\" href=\"mx://proceed?u=" + Uri.encode(url) + "\">أفهم المخاطر، تابع</a>" else "").append("</div>")
         return page(t, "تحذير", sb.toString())
     }
 }

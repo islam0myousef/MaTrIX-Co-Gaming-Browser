@@ -1103,7 +1103,11 @@ class MainActivity : Activity() {
             if (scheme == "file") return if (isOfflineFile(uri)) null else blockedResponse()
             if (scheme != "http" && scheme != "https") return null
             val host = uri.host ?: return null
-            if (host == Pages.HOST) return Pages.respond(this@MainActivity, db, theme, uri)
+            if (host == Pages.HOST) {
+                // صفحات التطبيق الداخلية ما تتحمّلش كـ iframe أو مورد فرعي من موقع خارجي
+                if (!req.isForMainFrame && !isInternal(tab.url)) return blockedResponse()
+                return Pages.respond(this@MainActivity, db, theme, uri)
+            }
 
             if (req.isForMainFrame) {
                 if (AdBlocker.isMaliciousPage(host)) {
@@ -1537,8 +1541,8 @@ class MainActivity : Activity() {
                 reloadIfAlive(tab)
             }
             "back" -> if (tab.web.canGoBack()) tab.web.goBack() else tab.web.loadUrl(Pages.HOME_URL)
-            "proceed" -> uri.getQueryParameter("u")?.let { u -> AdBlocker.tempAllow(hostOf(u)); tab.web.loadUrl(u) }
-            "legacy" -> uri.getQueryParameter("u")?.let { u -> openLegacy(tab, u) }
+            "proceed" -> uri.getQueryParameter("u")?.let { u -> if (Pages.isWebUrl(u)) { AdBlocker.tempAllow(hostOf(u)); tab.web.loadUrl(u) } }
+            "legacy" -> uri.getQueryParameter("u")?.let { u -> if (Pages.isWebUrl(u)) openLegacy(tab, u) }
             "gxrefresh" -> { GxCorner.ensure(this, true); toast("جاري تحديث ركن الألعاب...") }
             "clearspy" -> io.execute { db.clearSpyLog(); h.post { reloadIfAlive(tab) } }
         }
