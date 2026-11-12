@@ -36,6 +36,7 @@ class PinLock(private val a: MainActivity, private val ui: UiKit) {
         private const val UNTIL = "pin_until"
         private const val SESSION_MS = 5 * 60_000L
         private const val ITER = 20000
+        private const val ALGO = "pin_algo"
 
         @Volatile private var unlockedUntil = 0L
         fun enabled() = Cfg.bool(ON, false) && Cfg.str(HASH, "").isNotEmpty()
@@ -48,15 +49,19 @@ class PinLock(private val a: MainActivity, private val ui: UiKit) {
     private val th get() = ui.theme
 
     // ───────── التخزين ─────────
-    private fun hash(pin: String, salt: ByteArray): ByteArray {
-        val spec = PBEKeySpec(pin.toCharArray(), salt, ITER, 256)
-        return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1").generateSecret(spec).encoded
+    // v2 = PBKDF2-SHA256 بـ 120 ألف دورة (أندرويد 8+)، والقديم SHA1 بـ 20 ألف — بنفضل نقبل القديم ونرقّيه تلقائيًا أول ما الـ PIN يتكتب صح
+    private fun newAlgo() = Build.VERSION.SDK_INT >= 26
+    private fun hash(pin: String, salt: ByteArray, v2: Boolean = newAlgo()): ByteArray {
+        val spec = if (v2) PBEKeySpec(pin.toCharArray(), salt, 120_000, 256) else PBEKeySpec(pin.toCharArray(), salt, ITER, 256)
+        val alg = if (v2) "PBKDF2WithHmacSHA256" else "PBKDF2WithHmacSHA1"
+        return SecretKeyFactory.getInstance(alg).generateSecret(spec).encoded
     }
 
     private fun savePin(pin: String) {
         val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
         Cfg.setStr(SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
-        Cfg.setStr(HASH, Base64.encodeToString(hash(pin, salt), Base64.NO_WRAP))
+        Cfg.setStr(ALGO, if (newAlgo()) "2" else "1")
+        Cfg.setStr(HASH, Base64.encodeToString(hash(pin, salt, newAlgo()), Base64.NO_WRAP))
         Cfg.setBool(ON, true)
         Cfg.setInt(FAILS, 0); Cfg.setStr(UNTIL, "0")
     }
@@ -64,7 +69,10 @@ class PinLock(private val a: MainActivity, private val ui: UiKit) {
     private fun check(pin: String): Boolean = try {
         val salt = Base64.decode(Cfg.str(SALT), Base64.NO_WRAP)
         val stored = Base64.decode(Cfg.str(HASH), Base64.NO_WRAP)
-        MessageDigest.isEqual(stored, hash(pin, salt))
+        val v2 = Cfg.str(ALGO, "") == "2"
+        val ok = MessageDigest.isEqual(stored, hash(pin, salt, v2))
+        if (ok && !v2 && newAlgo()) { try { savePin(pin) } catch (_: Exception) {} }
+        ok
     } catch (_: Exception) { false }
 
     fun disable() { Cfg.setBool(ON, false); Cfg.setStr(HASH, ""); Cfg.setStr(SALT, ""); Cfg.setBool(BIO, false); lockNow() }

@@ -193,7 +193,13 @@ class InstallReceiver : BroadcastReceiver() {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                 @Suppress("DEPRECATION")
                 val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
-                if (confirm != null) { confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); try { ctx.startActivity(confirm) } catch (_: Exception) {} }
+                if (confirm != null) {
+                    // تحصين: شيل أي صلاحيات URI ممنوحة واي بيانات إضافية قبل ما نشغّل شاشة التأكيد بتاعة النظام
+                    confirm.setFlags(confirm.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION).inv())
+                    confirm.clipData = null
+                    confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    try { ctx.startActivity(confirm) } catch (_: Exception) {}
+                }
             }
             PackageInstaller.STATUS_SUCCESS -> {}
             else -> Toast.makeText(ctx, "فشل التحديث: " + (intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: ""), Toast.LENGTH_LONG).show()
