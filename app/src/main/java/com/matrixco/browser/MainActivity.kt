@@ -935,7 +935,7 @@ class MainActivity : Activity() {
 
     private fun showBlocked(tab: Tab, host: String, v: AdultGuard.Verdict) {
         tab.web.stopLoading()
-        tab.web.loadDataWithBaseURL("https://mx.blocked/", AdultGuard.blockHtml(host, v), "text/html", "utf-8", null)
+        tab.web.loadDataWithBaseURL("https://mx.blocked/", AdultGuard.blockHtml(host, v), "text/html", "utf-8", "https://mx.blocked/")
         AdBlocker.noteBlocked(host, Cat.ADS)
     }
 
@@ -955,7 +955,7 @@ class MainActivity : Activity() {
 
     private fun showRiskBlocked(tab: Tab, host: String, url: String, v: IronGuard.Verdict) {
         tab.web.stopLoading()
-        tab.web.loadDataWithBaseURL("https://mx.blocked/", IronGuard.blockHtml(host, v), "text/html", "utf-8", null)
+        tab.web.loadDataWithBaseURL("https://mx.blocked/", IronGuard.blockHtml(host, v), "text/html", "utf-8", "https://mx.blocked/")
         IronGuard.log(this, host, url, v)
         AdBlocker.noteBlocked(host, Cat.ADS)
     }
@@ -1174,8 +1174,9 @@ class MainActivity : Activity() {
             when (uri.scheme.orEmpty().lowercase()) {
                 "mx" -> {
                     // أوامر mx:// بتتنفّذ بس لو جاية من صفحات التطبيق الداخلية — أي موقع خارجي بيتجاهل
-                    val src = view?.url.orEmpty()
-                    val trusted = src.startsWith("https://" + Pages.HOST) || src.startsWith("https://mx.blocked")
+                    // صفحات المنع بتتحمّل بـ loadDataWithBaseURL فـ view.url ممكن يرجّع about:blank — فبنراجع tab.url كمان
+                    fun internalSrc(s: String) = s.startsWith("https://" + Pages.HOST) || s.startsWith("https://mx.blocked")
+                    val trusted = internalSrc(view?.url.orEmpty()) || internalSrc(tab.url)
                     if (trusted) handleMx(tab, uri)
                     return true
                 }
