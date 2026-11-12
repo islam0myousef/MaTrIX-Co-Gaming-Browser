@@ -229,7 +229,12 @@ class MainActivity : Activity() {
         GxCorner.onUpdated = { h.removeCallbacks(homeRefresh); h.postDelayed(homeRefresh, 800) }
         buildUi()
         CookieManager.getInstance().setAcceptCookie(true)
-        registerReceiver(dlReceiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
+        val dlFilter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(dlReceiver, dlFilter, Context.RECEIVER_EXPORTED)
+        } else {
+            registerReceiver(dlReceiver, dlFilter)
+        }
 
         val data = intent?.data
         val opened = data != null && (data.scheme == "http" || data.scheme == "https")
