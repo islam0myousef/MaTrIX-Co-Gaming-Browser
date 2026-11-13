@@ -185,6 +185,7 @@ class SettingsScreen(
         section(col, "الأمان")
         card(col, listOf(
             toggle("lock", "HTTPS أولًا", "يفتح كل موقع بتشفير ويرجع HTTP لو مش مدعوم", Cfg.HTTPS_ONLY, true),
+            toggle("shield", "منع المحتوى المختلط", "يمنع تحميل موارد HTTP داخل صفحات HTTPS؛ عطّله فقط لمواقع موثوقة لا تعمل بدونه", Cfg.MIXED, true) { a.refreshHostSettings() },
             toggle("shield_check", "Safe Browsing من جوجل", "حماية إضافية من التصيّد", Cfg.SAFEB, true),
             toggle("download", "تحذير الملفات الخطرة", "apk / exe / jar ...", Cfg.DLWARN, true)
         ))

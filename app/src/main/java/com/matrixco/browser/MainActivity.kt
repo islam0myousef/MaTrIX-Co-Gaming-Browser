@@ -890,7 +890,12 @@ class MainActivity : Activity() {
         s.setSupportZoom(true)
         s.builtInZoomControls = true
         s.displayZoomControls = false
-        s.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        // Preserve the user's compatibility preference while keeping strict blocking as the default.
+        s.mixedContentMode = if (Cfg.bool(Cfg.MIXED, true))
+            WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        else WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+        // Allow user-initiated and autoplay media; sites still control their own playback UX.
+        s.mediaPlaybackRequiresUserGesture = false
         s.setGeolocationEnabled(false)
         s.userAgentString = baseUa
         s.loadsImagesAutomatically = !Cfg.bool(Cfg.DATASAVER, false)
@@ -1079,8 +1084,12 @@ class MainActivity : Activity() {
 
     private fun applyHostSettings(tab: Tab) {
         val flags = db.getLegacy(tab.host)
-        // Mixed content cannot be enabled per-site; always enforce HTTPS subresources.
-        tab.web.settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        // Keep strict mixed-content blocking by default, but honor the existing
+        // compatibility toggle and the user's per-site legacy exception.
+        tab.web.settings.mixedContentMode =
+            if ((flags and 4) != 0 || !Cfg.bool(Cfg.MIXED, true))
+                WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            else WebSettings.MIXED_CONTENT_NEVER_ALLOW
     }
 
     private fun smartUrl(tab: Tab, url: String): String {
