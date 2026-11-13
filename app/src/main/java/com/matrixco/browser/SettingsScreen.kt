@@ -338,10 +338,18 @@ class SettingsScreen(
             Triple(3, "عالي — أقوى حجب", "كل القوائم القوية: بيحجب أكتر بس بياخد ذاكرة ووقت تحديث أطول")
         )
         card(col, presets.map { (l, t, d) ->
-            action("shield", t, (if (lvl == l) "✓ المستوى الحالي — " else "") + d + " (" + RuleUpdater.sources.count { it.level <= l } + " قائمة)") { RuleUpdater.applyPreset(l); render() }
+            action("shield", t, (if (lvl == l) "✓ المستوى الحالي — " else "") + d + " (" + RuleUpdater.sources.count { it.level <= l } + " قائمة)") {
+                RuleUpdater.applyPreset(l)
+                a.toastMsg("تم اختيار المستوى — جاري تطبيق القوائم المختارة...")
+                RuleUpdater.updateNow(a) { result ->
+                    a.toastMsg(result.message)
+                    if (stack.lastOrNull() == "lists") render()
+                }
+                render()
+            }
         })
         if (lvl == 0) col.addView(TextView(a).apply { text = "اختيارك الحالي مخصص (غيّرت قوائم بإيدك)."; textSize = 12f; setTextColor(theme.sub); setPadding(dp(8), dp(4), dp(8), dp(4)) })
-        card(col, listOf(action("reload", "تطبيق وتحديث الآن", "بيحمّل القوائم المختارة ويبني قاعدة الحجب (محتاج نت، ممكن ياخد دقيقة)") {
+        card(col, listOf(action("reload",  "تطبيق وتحديث الآن", "إعادة بناء الحجب من القوائم المختارة وتنزيل ما يلزم (محتاج نت)") {
             a.toastMsg("⏳ بحمّل ${on.size} قايمة...")
             RuleUpdater.updateNow(a) { r -> a.toastMsg(r.message); if (stack.lastOrNull() == "lists") render() }
         }))

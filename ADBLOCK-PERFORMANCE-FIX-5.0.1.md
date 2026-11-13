@@ -1,4 +1,4 @@
-# MaTRIX Co 5.0.1 — AdBlock performance hotfix
+# MaTRIX Co 5.0.2 — AdBlock performance hotfix
 
 ## Findings in 5.0.0
 - `NetworkRuleEngine.evaluate()` iterated every compiled network rule for every WebView resource request.
