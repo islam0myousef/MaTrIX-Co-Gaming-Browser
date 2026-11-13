@@ -1124,7 +1124,12 @@ class MainActivity : Activity() {
                 tab.blocked.incrementAndGet()
                 AdBlocker.noteBlocked(host, cat)
                 if (cat == Cat.SPY) io.execute { db.addSpyLog(host, tab.host, "known_spy", 95, "حُجب تلقائيًا") }
-                return if (cat == Cat.MAL) blockedResponse() else Stealth.response(uri, req.requestHeaders)
+                // A blocked network resource must fail at the WebView network layer.
+                // Returning Stealth.response() supplies HTTP 200 with a synthetic body,
+                // so ad-block test pages (fetch/XHR and resource probes) count it as loaded.
+                // Keep anti-adblock spoofing in the document-start layer; do not fake a
+                // successful network response for a resource we claim to have blocked.
+                return blockedResponse()
             }
             if (videoRegex.containsMatchIn(uri.path.orEmpty() + "?")) addVideo(tab, uri.toString())
             return null
