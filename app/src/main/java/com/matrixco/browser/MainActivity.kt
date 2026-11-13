@@ -223,7 +223,11 @@ class MainActivity : Activity() {
         lastNight = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         ui = UiKit(this).also { it.theme = theme }
         AdBlocker.init(this)
-        try { NetworkRuleEngine.replace(ShieldDatabase.getInstance(this).allNetworkRules()) } catch (_: Exception) {}
+        // Compile filter rules off the UI thread; large lists must never stall the whole phone.
+        io.execute {
+            try { NetworkRuleEngine.replace(ShieldDatabase.getInstance(this).allNetworkRules()) }
+            catch (_: Exception) { /* Keep the lightweight host-based blocker available. */ }
+        }
 
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         Favicons.onUpdated = { h.removeCallbacks(homeRefresh); h.postDelayed(homeRefresh, 1500) }

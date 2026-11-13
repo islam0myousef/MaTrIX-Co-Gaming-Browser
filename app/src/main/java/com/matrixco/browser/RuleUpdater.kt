@@ -174,8 +174,10 @@ object RuleUpdater {
         if (!db.replaceRemote(sets)) return UpdateResult(false, 0, "قاعدة البيانات رفضت التحديث — القواعد القديمة محفوظة")
         for ((source, rules) in pendingNetworkRules) dbSafeReplaceRules(context, source, rules)
         AdBlocker.refreshRules(context)
+        // Rule compilation and SQLite compaction are deliberately not run in the
+        // request path. The engine is rebuilt on the updater worker; VACUUM is
+        // deferred so a successful filter refresh does not freeze the device.
         NetworkRuleEngine.replace(db.allNetworkRules())
-        db.vacuum()
 
         val now = System.currentTimeMillis()
         val unique = sets.values.sumOf { it.size }

@@ -1,4 +1,4 @@
-# MaTRIX Co AdBlock rebuild — 5.0.0
+# MaTRIX Co AdBlock rebuild — 5.0.1
 
 ## What changed
 - Added an independent `NetworkRuleEngine` for a bounded ABP-compatible network-rule subset.
