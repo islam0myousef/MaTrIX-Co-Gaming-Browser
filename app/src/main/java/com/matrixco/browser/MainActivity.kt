@@ -1191,9 +1191,9 @@ class MainActivity : Activity() {
                 }
                 "https" -> {
                     val host = uri.host.orEmpty()
-                    if (host != Pages.HOST && req.isForMainFrame && !AdBlocker.isSiteAllowed(tab.host) && AdBlocker.enabled()) {
-                        val cat = AdBlocker.categoryOf(host)
-                        if (cat != 0 && cat != Cat.MAL && cat != Cat.SOC) {
+                    if (host != Pages.HOST && req.isForMainFrame && AdBlocker.enabled()) {
+                        val cat = AdBlocker.checkMainFrame(uri, tab.host)
+                        if (cat != 0) {
                             tab.blocked.incrementAndGet(); AdBlocker.noteBlocked(host, cat)
                             h.post { toast("🛡 تم حجب تحويل إعلاني") }
                             return true

@@ -183,6 +183,24 @@ object AdBlocker {
         return 0
     }
 
+    /**
+     * فحص تنقّل الصفحة الرئيسية/إعادة التوجيه.
+     * لا نطبّق أنماط المسارات العامة هنا حتى لا نحجب صفحات شرعية لمجرد احتواء مسارها على كلمة ads.
+     */
+    fun checkMainFrame(uri: Uri, pageHost: String?): Int {
+        if (!enabled()) return 0
+        val scheme = uri.scheme?.lowercase(Locale.ROOT)
+        if (scheme != "http" && scheme != "https") return 0
+        val host = norm(uri.host)
+        if (host.isEmpty() || isSiteAllowed(host) || isSiteAllowed(pageHost)) return 0
+        val third = isThirdParty(host, pageHost)
+        val cat = categoryOf(host)
+        if (cat != 0 && catOn(cat, third) && cat != Cat.MAL && cat != Cat.SOC) return cat
+        // أسماء خوادم الإعلانات الواضحة فقط؛ تجنب الحجب اعتمادًا على كلمات عامة في URL.
+        if (adsOn() && third && adHostRegex.containsMatchIn(host)) return Cat.ADS
+        return 0
+    }
+
     fun shouldBlock(uri: Uri, pageHost: String?, mainFrame: Boolean): Boolean = check(uri, pageHost, mainFrame) != 0
 
     /** هل الصفحة نفسها خبيثة (للتحذير قبل الفتح)؟ */
