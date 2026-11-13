@@ -98,6 +98,10 @@ object RuleUpdater {
         }
     }
 
+    private fun dbSafeReplaceRules(context: Context, source: String, rules: Collection<String>) {
+        try { ShieldDatabase.getInstance(context).replaceNetworkRules("core:" + source, rules) } catch (_: Exception) {}
+    }
+
     /** Synchronous entry point used only by the WorkManager worker. */
     internal fun performScheduledUpdate(context: Context): UpdateResult {
         val result = performUpdate(context.applicationContext)
@@ -111,7 +115,7 @@ object RuleUpdater {
     /** مجموعة ثريدز للتحميل المتوازي — القوائم بتتحمّل كلها مع بعض بدل واحدة ورا التانية، فالدرع بيبقى جاهز خلال ثواني بدل دقايق */
     private val fetchPool = Executors.newFixedThreadPool(6)
 
-    private data class SourceResult(val source: Source, val success: Boolean, val count: Int, val list: LongList, val err: String)
+    private data class SourceResult(val source: Source, val success: Boolean, val count: Int, val list: LongList, val networkRules: List<String>, val err: String)
 
     private fun performUpdate(context: Context): UpdateResult {
         val active = enabledSources()
@@ -120,6 +124,7 @@ object RuleUpdater {
         val futures = active.map { s ->
             fetchPool.submit<SourceResult> {
                 val local = LongList()
+                val compiledRules = ArrayList<String>()
                 var count = 0
                 val sink: (String) -> Unit = { d -> local.add(Hash.of(d)); count++ }
                 val success = try {
@@ -127,11 +132,15 @@ object RuleUpdater {
                         when (s.kind) {
                             Kind.HOSTS -> parseHostsLine(line, sink)
                             Kind.DOMAINS -> parseDomainLine(line, sink)
-                            Kind.ADBLOCK -> parseAdblockLine(line, sink)
+                            Kind.ADBLOCK -> {
+                                parseAdblockLine(line, sink)
+                                val trimmed = line.trim()
+                                if (trimmed.isNotEmpty() && !trimmed.startsWith("!") && !trimmed.startsWith("[") && trimmed.length <= 2048 && compiledRules.size < 120_000) { compiledRules.add(trimmed); count++ }
+                            }
                         }
                     }
                 } catch (e: Exception) { lastError = (e.javaClass.simpleName + " " + (e.message ?: "")).take(60); false }
-                SourceResult(s, success, count, local, lastError)
+                SourceResult(s, success, count, local, compiledRules, lastError)
             }
         }
 
@@ -140,6 +149,7 @@ object RuleUpdater {
         val report = ArrayList<String>()
         var total = 0
         val status = ArrayList<String>()
+        val pendingNetworkRules = HashMap<String, List<String>>()
         for (f in futures) {
             val r = try { f.get() } catch (e: Exception) { null } ?: continue
             if (!r.success || r.count < MIN_PER_SOURCE) {
@@ -147,6 +157,7 @@ object RuleUpdater {
                 report.add(r.source.name + ": فشل")
             } else {
                 ok.add(r.source.name); total += r.count
+                if (r.source.kind == Kind.ADBLOCK && r.networkRules.isNotEmpty()) pendingNetworkRules[r.source.id] = r.networkRules
                 status.add(r.source.id + "=ok:" + r.count)
                 report.add(r.source.name + ": " + r.count)
                 r.list.appendAllTo(lists.getOrPut(r.source.cat) { LongList() })
@@ -161,7 +172,9 @@ object RuleUpdater {
 
         val db = ShieldDatabase.getInstance(context)
         if (!db.replaceRemote(sets)) return UpdateResult(false, 0, "قاعدة البيانات رفضت التحديث — القواعد القديمة محفوظة")
+        for ((source, rules) in pendingNetworkRules) dbSafeReplaceRules(context, source, rules)
         AdBlocker.refreshRules(context)
+        NetworkRuleEngine.replace(db.allNetworkRules())
         db.vacuum()
 
         val now = System.currentTimeMillis()

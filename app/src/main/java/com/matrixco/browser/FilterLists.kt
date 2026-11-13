@@ -142,21 +142,27 @@ object FilterEngine {
 
     private val bareDomain = Regex("^[a-z0-9][a-z0-9.-]*\\.[a-z]{2,}$")
 
-    private fun parseInto(raw: String, kind: FlKind, bare: Boolean, doms: LongList, cosm: MutableList<Pair<Long, String>>) {
+    private fun parseInto(raw: String, kind: FlKind, bare: Boolean, doms: LongList, cosm: MutableList<Pair<Long, String>>, networkRules: MutableList<String>) {
         if (kind == FlKind.HOSTS) { RuleUpdater.parseHostsLine(raw) { doms.add(Hash.of(it)) }; RuleUpdater.parseDomainLine(raw) { doms.add(Hash.of(it)) }; return }
         val line = raw.trim()
-        if (line.isEmpty() || line[0] == '!' || line[0] == '[' || line.startsWith("@@")) return
+        if (line.isEmpty() || line[0] == '!' || line[0] == '[') return
         if (line.contains("#@#") || line.contains("#?#") || line.contains("#$#") || line.contains("#%#")) return
         val i = line.indexOf("##")
         if (i >= 0) { cosmetic(line, i, cosm); return }
+        if (line.startsWith("@@") || line.contains('$')) {
+            if (line.length <= 2048 && networkRules.size < 120_000) networkRules.add(line)
+            return
+        }
         if (bare && bareDomain.matches(line.lowercase())) { doms.add(Hash.of(line.lowercase())); return }
         RuleUpdater.parseAdblockLine(line) { doms.add(Hash.of(it)) }
+        if (line.length <= 2048 && networkRules.size < 120_000) networkRules.add(line)
     }
 
-    private fun store(ctx: Context, l: FilterList, doms: LongList, cosm: List<Pair<Long, String>>): Boolean {
+    private fun store(ctx: Context, l: FilterList, doms: LongList, cosm: List<Pair<Long, String>>, networkRules: List<String>): Boolean {
         val db = ShieldDatabase.getInstance(ctx)
         val d = doms.distinctSorted()
         if (!db.flReplace(lid(l.id), l.cat, d, cosm)) return false
+        if (!db.replaceNetworkRules("list:" + l.id, networkRules)) return false
         db.setMeta("fl_st_" + l.id, "✓ " + d.size + " نطاق • " + cosm.size + " قاعدة إخفاء")
         genericCache = null
         return true
@@ -166,10 +172,10 @@ object FilterEngine {
         val db = ShieldDatabase.getInstance(ctx)
         var err = ""
         for (url in listOf(l.url) + l.alt) {
-            val doms = LongList(); val cosm = ArrayList<Pair<Long, String>>()
+            val doms = LongList(); val cosm = ArrayList<Pair<Long, String>>(); val networkRules = ArrayList<String>()
             var lines = 0
-            val ok = RuleUpdater.streamLines(url, 80_000_000) { line -> lines++; parseInto(line, l.kind, false, doms, cosm) }
-            if (ok && lines >= 5 && (doms.n > 0 || cosm.isNotEmpty())) return store(ctx, l, doms, cosm)
+            val ok = RuleUpdater.streamLines(url, 80_000_000) { line -> lines++; parseInto(line, l.kind, false, doms, cosm, networkRules) }
+            if (ok && lines >= 5 && (doms.n > 0 || cosm.isNotEmpty() || networkRules.isNotEmpty())) return store(ctx, l, doms, cosm, networkRules)
             err = if (!ok) RuleUpdater.lastError else "القائمة فاضية أو بصيغة مش مدعومة"
         }
         db.setMeta("fl_st_" + l.id, "⚠ فشل التحميل: " + err)
@@ -179,7 +185,8 @@ object FilterEngine {
     private fun unload(ctx: Context, l: FilterList) {
         try {
             val db = ShieldDatabase.getInstance(ctx)
-            db.flDelete(lid(l.id)); db.setMeta("fl_st_" + l.id, ""); genericCache = null
+            db.flDelete(lid(l.id)); db.clearNetworkRules("list:" + l.id); db.setMeta("fl_st_" + l.id, ""); genericCache = null
+            NetworkRuleEngine.replace(db.allNetworkRules())
             AdBlocker.refreshRules(ctx)
         } catch (_: Exception) {}
     }
@@ -189,7 +196,7 @@ object FilterEngine {
         if (!loading.add(l.id)) return
         executor.execute {
             val ok = try { load(app, l) } catch (_: Throwable) { false }
-            if (ok) AdBlocker.refreshRules(app)
+            if (ok) { NetworkRuleEngine.replace(ShieldDatabase.getInstance(app).allNetworkRules()); AdBlocker.refreshRules(app) }
             loading.remove(l.id)
             main.post { cb(ok) }
         }
@@ -214,6 +221,7 @@ object FilterEngine {
         for (l in all()) if (isOn(l)) try { load(ctx, l) } catch (_: Throwable) {}
         try { applyCustomRules(ctx) } catch (_: Throwable) {}
         genericCache = null
+        try { NetworkRuleEngine.replace(ShieldDatabase.getInstance(ctx).allNetworkRules()) } catch (_: Exception) {}
         AdBlocker.refreshRules(ctx)
     }
 
@@ -224,6 +232,7 @@ object FilterEngine {
             for (l in all()) if (isOn(l)) { total++; if (try { load(app, l) } catch (_: Throwable) { false }) ok++ }
             try { applyCustomRules(app) } catch (_: Throwable) {}
             genericCache = null
+            try { NetworkRuleEngine.replace(ShieldDatabase.getInstance(app).allNetworkRules()) } catch (_: Exception) {}
             AdBlocker.refreshRules(app)
             main.post { cb(ok, total) }
         }
@@ -233,11 +242,12 @@ object FilterEngine {
     fun applyCustomRules(ctx: Context): Int {
         val text = Cfg.str(RULES_KEY, "")
         val l = FilterList(RULES_ID, "قواعدك", "", "", 2)
-        val doms = LongList(); val cosm = ArrayList<Pair<Long, String>>()
-        for (line in text.lines()) parseInto(line, FlKind.ADBLOCK, true, doms, cosm)
+        val doms = LongList(); val cosm = ArrayList<Pair<Long, String>>(); val networkRules = ArrayList<String>()
+        for (line in text.lines()) parseInto(line, FlKind.ADBLOCK, true, doms, cosm, networkRules)
         val db = ShieldDatabase.getInstance(ctx)
-        if (text.isBlank()) { db.flDelete(lid(RULES_ID)); genericCache = null; return 0 }
-        store(ctx, l, doms, cosm)
+        if (text.isBlank()) { db.flDelete(lid(RULES_ID)); db.clearNetworkRules("list:" + RULES_ID); genericCache = null; NetworkRuleEngine.replace(db.allNetworkRules()); return 0 }
+        store(ctx, l, doms, cosm, networkRules)
+        NetworkRuleEngine.replace(db.allNetworkRules())
         return doms.n + cosm.size
     }
 

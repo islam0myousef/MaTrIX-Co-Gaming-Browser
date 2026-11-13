@@ -32,7 +32,7 @@ object Hash {
 object Cat { const val ADS = 1; const val TRK = 2; const val MAL = 3; const val SOC = 4; const val SPY = 5 }
 
 class ShieldDatabase private constructor(private val ctx: Context) :
-    SQLiteOpenHelper(ctx, "matrix_shield.db", null, 5) {
+    SQLiteOpenHelper(ctx, "matrix_shield.db", null, 6) {
 
     private val lock = Any()
 
@@ -83,6 +83,8 @@ class ShieldDatabase private constructor(private val ctx: Context) :
         db.execSQL("CREATE TABLE IF NOT EXISTS spy_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, host TEXT, page TEXT, type TEXT, conf INTEGER, decision TEXT)")
         db.execSQL("CREATE TABLE IF NOT EXISTS spy_rules (host TEXT NOT NULL COLLATE NOCASE, type TEXT NOT NULL, decision TEXT NOT NULL, PRIMARY KEY(host, type))")
         db.execSQL("CREATE TABLE IF NOT EXISTS legacy_hosts (host TEXT PRIMARY KEY COLLATE NOCASE, flags INTEGER NOT NULL)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS network_rules (source TEXT NOT NULL, rule TEXT NOT NULL, PRIMARY KEY(source, rule)) WITHOUT ROWID")
+        db.execSQL("CREATE INDEX IF NOT EXISTS network_rules_source ON network_rules(source)")
     }
 
     // ───────────── الحجب ─────────────
@@ -287,6 +289,37 @@ class ShieldDatabase private constructor(private val ctx: Context) :
             } finally { db.endTransaction() }
             true
         } catch (_: Exception) { false }
+    }
+
+    /** Replace one filter source atomically; previous rules survive a failed insert. */
+    fun replaceNetworkRules(source: String, rules: Collection<String>): Boolean = synchronized(lock) {
+        val db = writableDatabase
+        try {
+            db.beginTransaction()
+            try {
+                db.delete("network_rules", "source = ?", arrayOf(source))
+                val st = db.compileStatement("INSERT OR IGNORE INTO network_rules(source, rule) VALUES(?, ?)")
+                for (rule in rules) {
+                    st.clearBindings(); st.bindString(1, source); st.bindString(2, rule); st.executeInsert()
+                }
+                st.close()
+                db.setTransactionSuccessful()
+            } finally { db.endTransaction() }
+            true
+        } catch (_: Exception) { false }
+    }
+
+    fun allNetworkRules(): List<Pair<String, String>> {
+        val out = ArrayList<Pair<String, String>>()
+        readableDatabase.rawQuery("SELECT source, rule FROM network_rules", null).use { c ->
+            while (c.moveToNext()) out.add(c.getString(0) to c.getString(1))
+        }
+        return out
+    }
+
+    fun clearNetworkRules(source: String) = synchronized(lock) {
+        try { writableDatabase.delete("network_rules", "source = ?", arrayOf(source)) } catch (_: Exception) {}
+        Unit
     }
 
     /** VACUUM لتقليل حجم الملف بعد الحذف/الاستبدال */

@@ -223,6 +223,7 @@ class MainActivity : Activity() {
         lastNight = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         ui = UiKit(this).also { it.theme = theme }
         AdBlocker.init(this)
+        try { NetworkRuleEngine.replace(ShieldDatabase.getInstance(this).allNetworkRules()) } catch (_: Exception) {}
 
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         Favicons.onUpdated = { h.removeCallbacks(homeRefresh); h.postDelayed(homeRefresh, 1500) }
@@ -1110,6 +1111,12 @@ class MainActivity : Activity() {
             }
 
             if (req.isForMainFrame) {
+                val documentCat = AdBlocker.check(uri, tab.host, true, req.requestHeaders["Accept"])
+                if (documentCat != 0) {
+                    tab.blocked.incrementAndGet()
+                    AdBlocker.noteBlocked(host, documentCat)
+                    return blockedResponse()
+                }
                 if (AdBlocker.isMaliciousPage(host)) {
                     io.execute { db.addSpyLog(host, host, "known_spy", 97, "صفحة خبيثة — تحذير") }
                     return Pages.respond(this@MainActivity, db, theme, Uri.parse("https://mx.home/warn?u=" + Uri.encode(uri.toString())))
@@ -1119,7 +1126,7 @@ class MainActivity : Activity() {
                 return null
             }
 
-            val cat = AdBlocker.check(uri, tab.host, false)
+            val cat = AdBlocker.check(uri, tab.host, false, req.requestHeaders["Accept"])
             if (cat != 0) {
                 tab.blocked.incrementAndGet()
                 AdBlocker.noteBlocked(host, cat)
@@ -1197,7 +1204,8 @@ class MainActivity : Activity() {
                 "https" -> {
                     val host = uri.host.orEmpty()
                     if (host != Pages.HOST && req.isForMainFrame && AdBlocker.enabled()) {
-                        val cat = AdBlocker.checkMainFrame(uri, tab.host)
+                        val networkCat = AdBlocker.check(uri, tab.host, true)
+                        val cat = if (networkCat != 0) networkCat else AdBlocker.checkMainFrame(uri, tab.host)
                         if (cat != 0) {
                             tab.blocked.incrementAndGet(); AdBlocker.noteBlocked(host, cat)
                             h.post { toast("🛡 تم حجب تحويل إعلاني") }

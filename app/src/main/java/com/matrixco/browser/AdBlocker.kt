@@ -162,23 +162,29 @@ object AdBlocker {
     }
 
     /** يرجّع تصنيف الحجب لو الطلب لازم يتحجب، وإلا 0 */
-    fun check(uri: Uri, pageHost: String?, mainFrame: Boolean): Int {
-        if (!enabled() || mainFrame) return 0
+    fun check(uri: Uri, pageHost: String?, mainFrame: Boolean, accept: String? = null): Int {
+        if (!enabled()) return 0
         val scheme = uri.scheme?.lowercase(Locale.ROOT)
         if (scheme != "http" && scheme != "https") return 0
         val host = norm(uri.host)
         if (host.isEmpty()) return 0
-        if (isSiteAllowed(pageHost) || isSiteAllowed(host)) return 0
+        if ((!mainFrame && isSiteAllowed(pageHost)) || isSiteAllowed(host)) return 0
+
+        val requestType = NetworkRuleEngine.inferType(uri.toString(), accept, mainFrame)
+        val networkDecision = NetworkRuleEngine.evaluate(NetworkRuleEngine.RequestContext(uri.toString(), pageHost, requestType, mainFrame))
+        if (networkDecision.blocked && catOn(networkDecision.category, isThirdParty(host, pageHost))) return networkDecision.category
 
         val third = isThirdParty(host, pageHost)
         val cat = categoryOf(host)
         if (cat != 0 && catOn(cat, third)) return cat
 
         if (adsOn()) {
-            if (adHostRegex.containsMatchIn(host)) return Cat.ADS
-            val full = uri.toString().lowercase(Locale.ROOT)
-            if (annoyOn()) for (p in antiAdblock) if (full.contains(p)) return Cat.ADS
-            for (p in adPatterns) if (full.contains(p)) return Cat.ADS
+            if (adHostRegex.containsMatchIn(host) && (!mainFrame || third)) return Cat.ADS
+            if (!mainFrame) {
+                val full = uri.toString().lowercase(Locale.ROOT)
+                if (annoyOn()) for (p in antiAdblock) if (full.contains(p)) return Cat.ADS
+                for (p in adPatterns) if (full.contains(p)) return Cat.ADS
+            }
         }
         return 0
     }

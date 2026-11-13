@@ -134,3 +134,14 @@ Keep a backup before installing over an existing version. Android only permits i
 - `app/src/main/res/drawable-nodpi/matrix_dragon.gif`: user-supplied 498×280, 59-frame dragon animation.
 - `app/build.gradle.kts`: version 4.5.0 / code 450 and Glide 4.16.0.
 - Not yet built or device-tested. Resume depends on the release server supporting byte ranges and stable validators.
+
+
+## 4.9.0 AdBlock rebuild
+
+A new independent ABP-compatible network-rule engine was added. See `ADBLOCK-REBUILD-4.9.0.md` for supported syntax and limitations. The Android Gradle build was not verified in this environment because the Gradle 8.11.1 distribution could not be downloaded.
+
+
+## 5.0.0 — AdBlock rebuild version label
+- Updated Android `versionName` to `5.0.0` and `versionCode` to `500`.
+- The AdBlock engine implementation is unchanged from the prior 4.9.0 rebuild package; this is a version-number update only.
+- Android Gradle build and on-device AdBlock test remain unverified.
