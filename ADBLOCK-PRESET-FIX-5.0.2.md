@@ -1,4 +1,4 @@
-# MaTRIX Co 5.0.2 — Preset application fix
+# MaTRIX Co 5.0.3 — Preset application fix
 
 - Selecting Low / Recommended / High now immediately starts a refresh for the selected core block sources.
 - The existing explicit "Apply and update now" action remains available for manual refresh.

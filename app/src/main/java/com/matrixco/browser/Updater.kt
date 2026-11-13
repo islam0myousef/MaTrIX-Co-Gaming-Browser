@@ -82,6 +82,11 @@ object Updater {
     }
 
     fun download(ctx: Context, info: Info, onProgress: (Long, Long) -> Unit, cancelled: () -> Boolean): File {
+        // Fail closed: never install an update whose release metadata has no valid digest.
+        val expectedDigest = info.sha256?.trim()?.lowercase()
+        if (expectedDigest == null || !expectedDigest.matches(Regex("^[a-f0-9]{64}$"))) {
+            throw IOException("التحديث مرفوض: بصمة SHA-256 غير موجودة أو غير صالحة في بيانات الإصدار")
+        }
         val dir = File(ctx.filesDir, "update").apply { mkdirs() }
         val part = File(dir, "matrix-update.apk.part")
         val meta = File(dir, "matrix-update.properties")
@@ -95,7 +100,11 @@ object Updater {
         var existing = if (part.exists()) part.length() else 0L
         if (info.size > 0L && existing > info.size) { part.delete(); existing = 0L }
 
-        val c = URL(info.url).openConnection() as HttpURLConnection
+        val parsedUpdateUrl = URL(info.url)
+        if (parsedUpdateUrl.protocol != "https" || parsedUpdateUrl.host != "github.com") {
+            throw IOException("مصدر التحديث غير موثوق")
+        }
+        val c = parsedUpdateUrl.openConnection() as HttpURLConnection
         c.connectTimeout = 15000; c.readTimeout = 30000; c.instanceFollowRedirects = true
         c.setRequestProperty("User-Agent", "MaTrIX-Co-Updater")
         if (existing > 0L) {
@@ -152,11 +161,10 @@ object Updater {
             }
             if (part.length() < 100_000L) throw IOException("الملف لم يكتمل أو حجمه غير صالح")
             if (total > 0L && part.length() != total) throw IOException("انقطع الاتصال؛ تم حفظ الملف الجزئي للاستكمال")
-            if (info.sha256 != null) {
-                val actual = md.digest().joinToString("") { "%02x".format(it) }
-                if (!actual.equals(info.sha256, true)) {
-                    part.delete(); meta.delete(); throw IOException("الملف تالف (SHA-256 غير مطابق)")
-                }
+            val actual = md.digest().joinToString("") { "%02x".format(it) }
+            if (!actual.equals(expectedDigest, true)) {
+                part.delete(); meta.delete()
+                throw IOException("الملف تالف أو تم العبث به (SHA-256 غير مطابق)")
             }
             if (complete.exists()) complete.delete()
             if (!part.renameTo(complete)) { part.copyTo(complete, overwrite = true); part.delete() }

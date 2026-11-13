@@ -890,11 +890,11 @@ class MainActivity : Activity() {
         s.setSupportZoom(true)
         s.builtInZoomControls = true
         s.displayZoomControls = false
-        s.mixedContentMode = if (Cfg.bool(Cfg.MIXED, true)) WebSettings.MIXED_CONTENT_NEVER_ALLOW else WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-        s.setGeolocationEnabled(true)
+        s.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        s.setGeolocationEnabled(false)
         s.userAgentString = baseUa
         s.loadsImagesAutomatically = !Cfg.bool(Cfg.DATASAVER, false)
-        if (Build.VERSION.SDK_INT >= 26) s.safeBrowsingEnabled = Cfg.bool(Cfg.SAFEB, true)
+        if (Build.VERSION.SDK_INT >= 26) s.safeBrowsingEnabled = true
         CookieManager.getInstance().setAcceptThirdPartyCookies(w, Cfg.bool(Cfg.TPCOOK, false))
         w.setBackgroundColor(theme.bg)
         w.overScrollMode = View.OVER_SCROLL_NEVER
@@ -1079,8 +1079,8 @@ class MainActivity : Activity() {
 
     private fun applyHostSettings(tab: Tab) {
         val flags = db.getLegacy(tab.host)
-        tab.web.settings.mixedContentMode =
-            if ((flags and 4) != 0 || !Cfg.bool(Cfg.MIXED, true)) WebSettings.MIXED_CONTENT_ALWAYS_ALLOW else WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        // Mixed content cannot be enabled per-site; always enforce HTTPS subresources.
+        tab.web.settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
     }
 
     private fun smartUrl(tab: Tab, url: String): String {
@@ -1096,7 +1096,6 @@ class MainActivity : Activity() {
         return FilterEngine.safeSearch(url)
     }
 
-    private val sslOnce = HashSet<String>()
     private var sslDialogOpen = false
 
     private fun makeClient(tab: Tab) = object : WebViewClient() {
@@ -1276,18 +1275,14 @@ class MainActivity : Activity() {
             val hnd = handler ?: return
             val err = error ?: run { hnd.cancel(); return }
             val host = hostOf(err.url)
-            if (IronGuard.enabled()) {
-                hnd.cancel()
-                IronGuard.log(this@MainActivity, host, err.url ?: "", IronGuard.Verdict(100, "شهادة الأمان غير صالحة أو منتهية"))
-                if (hostOf(view?.url.orEmpty()) == host || hostOf(tab.url) == host || tab.pending != null) h.post { showRiskBlocked(tab, host, err.url ?: "", IronGuard.Verdict(100, "شهادة الأمان غير صالحة أو منتهية")) }
-                return
-            }
-            val flags = db.getLegacy(host)
-            if ((flags and 2) != 0 || sslOnce.contains(host)) { tab.sslBroken = true; hnd.proceed(); h.post { refreshChrome() }; return }
-            val isMain = hostOf(view?.url.orEmpty()) == host
+            // Never bypass certificate errors. User-facing exceptions are intentionally
+            // removed because they can turn an active MITM into a trusted connection.
             hnd.cancel()
-            if (!isMain || AdBlocker.isMaliciousPage(host)) return
-            h.post { askSsl(tab, host, err) }
+            val verdict = IronGuard.Verdict(100, "شهادة الأمان غير صالحة أو منتهية")
+            IronGuard.log(this@MainActivity, host, err.url ?: "", verdict)
+            if (hostOf(view?.url.orEmpty()) == host || hostOf(tab.url) == host || tab.pending != null) {
+                h.post { showRiskBlocked(tab, host, err.url ?: "", verdict) }
+            }
         }
 
         override fun onRenderProcessGone(view: WebView?, detail: android.webkit.RenderProcessGoneDetail?): Boolean {
@@ -1331,31 +1326,6 @@ class MainActivity : Activity() {
             if (tab === cur) refreshChrome()
             return true
         }
-    }
-
-    private fun askSsl(tab: Tab, host: String, err: SslError) {
-        if (sslDialogOpen || !tabs.contains(tab)) return
-        sslDialogOpen = true
-        val why = when (err.primaryError) {
-            SslError.SSL_EXPIRED -> "الشهادة منتهية الصلاحية"
-            SslError.SSL_IDMISMATCH -> "الشهادة لا تخص هذا الموقع"
-            SslError.SSL_UNTRUSTED -> "شهادة ذاتية أو من جهة غير موثوقة (شائع في الراوترات)"
-            SslError.SSL_NOTYETVALID -> "الشهادة لم يبدأ سريانها بعد (تاريخ الجهاز؟)"
-            SslError.SSL_DATE_INVALID -> "تاريخ الشهادة غير صحيح"
-            else -> "شهادة غير صالحة"
-        }
-        val d = ui.sheet { box, dlg ->
-            box.addView(ui.titleView("⚠ اتصال غير آمن"))
-            box.addView(ui.infoView(host + "\n" + why + "\nلو ده راوتر أو جهاز في شبكتك البيتية فغالبًا آمن، لكن لو موقع على الإنترنت ننصح بالرجوع."))
-            box.addView(ui.button("⬅ رجوع (الأكثر أمانًا)") { dlg.dismiss(); if (tab.web.canGoBack()) tab.web.goBack() })
-            box.addView(ui.space(8))
-            box.addView(ui.button("متابعة هذه المرة فقط", false) { dlg.dismiss(); sslOnce.add(host); tab.web.reload() })
-            box.addView(ui.space(8))
-            box.addView(ui.button("متابعة دائمًا لهذا الموقع (وضع التوافق)", false) {
-                dlg.dismiss(); db.setLegacy(host, db.getLegacy(host) or 2 or 1); tab.web.reload()
-            })
-        }
-        d.setOnDismissListener { sslDialogOpen = false }
     }
 
     private fun makeChrome(tab: Tab) = object : WebChromeClient() {
