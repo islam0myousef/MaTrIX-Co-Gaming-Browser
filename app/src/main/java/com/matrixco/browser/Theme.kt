@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 
 data class MxTheme(
     val id: String, val name: String,
@@ -87,12 +89,42 @@ object Ui {
 /** إعدادات المتصفح (SharedPreferences) */
 object Cfg {
     private lateinit var p: SharedPreferences
-    fun init(ctx: Context) { if (!::p.isInitialized) p = ctx.applicationContext.getSharedPreferences("mx_prefs", Context.MODE_PRIVATE) }
+    private var ep: SharedPreferences? = null
+
+    fun init(ctx: Context) {
+        if (!::p.isInitialized) p = ctx.applicationContext.getSharedPreferences("mx_prefs", Context.MODE_PRIVATE)
+        if (ep == null) {
+            ep = runCatching {
+                EncryptedSharedPreferences.create(
+                    ctx.applicationContext,
+                    "mx_secure_prefs",
+                    MasterKey.Builder(ctx.applicationContext).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
+                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                )
+            }.getOrNull()
+        }
+        migrateSecrets()
+    }
+
+    /** ينقل المفاتيح الحساسة من التخزين العادي للتخزين المشفر مرة واحدة */
+    private fun migrateSecrets() {
+        val sec = ep ?: return
+        if (::p.isInitialized && p.contains(APIKEY)) {
+            sec.edit().putString(APIKEY, p.getString(APIKEY, "")).apply()
+            p.edit().remove(APIKEY).apply()
+        }
+    }
+
     val prefs: SharedPreferences get() = p
     fun bool(k: String, d: Boolean) = p.getBoolean(k, d)
     fun setBool(k: String, v: Boolean) = p.edit().putBoolean(k, v).apply()
-    fun str(k: String, d: String = ""): String = p.getString(k, d) ?: d
-    fun setStr(k: String, v: String) = p.edit().putString(k, v).apply()
+    fun str(k: String, d: String = ""): String =
+        if (k == APIKEY && ep != null) ep!!.getString(k, d) ?: d else p.getString(k, d) ?: d
+    fun setStr(k: String, v: String) {
+        if (k == APIKEY && ep != null) ep!!.edit().putString(k, v).apply()
+        else p.edit().putString(k, v).apply()
+    }
     fun int(k: String, d: Int) = p.getInt(k, d)
     fun setInt(k: String, v: Int) = p.edit().putInt(k, v).apply()
 

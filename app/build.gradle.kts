@@ -15,9 +15,9 @@ android {
     defaultConfig {
         applicationId = "com.matrixco.browser"
         minSdk = 23
-        targetSdk = 34
-        versionCode = 505
-        versionName = "5.0.5"
+        targetSdk = 35
+        versionCode = 506
+        versionName = "5.0.6"
     }
 
     signingConfigs {
@@ -40,8 +40,8 @@ android {
             if (!System.getenv("MX_KEYSTORE").isNullOrBlank()) {
                 signingConfig = signingConfigs.getByName("release")
             }
-            isMinifyEnabled = false
-            isShrinkResources = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -62,6 +62,8 @@ android {
 
 dependencies {
     implementation("androidx.webkit:webkit:1.12.1")
+    // Encrypted storage for the user-entered AI API key.
+    implementation("androidx.security:security-crypto:1.1.0")
     // Persistent, network-constrained background refresh for security feeds.
     implementation("androidx.work:work-runtime:2.11.2")
     // GIF decoding for the animated GX update dialog.
