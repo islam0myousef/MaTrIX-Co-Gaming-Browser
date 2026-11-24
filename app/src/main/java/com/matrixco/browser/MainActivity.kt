@@ -171,6 +171,8 @@ class MainActivity : Activity() {
     private var customCb: WebChromeClient.CustomViewCallback? = null
     private var fileCb: ValueCallback<Array<Uri>>? = null
     private var pendingDownload: DownloadReq? = null
+    private var geoCallback: android.webkit.GeolocationPermissions.Callback? = null
+    private var geoOrigin: String? = null
     private var gameMode = false
     private var autoGame = false
     private var baseUa = ""
@@ -426,8 +428,12 @@ class MainActivity : Activity() {
             if (req != null && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) startDownload(req.url, req.ua, req.cd, req.mime)
             else if (req != null) toast("لازم تسمح بصلاحية التخزين عشان التحميل")
         }
-        if (requestCode == REQ_LOCATION && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            val t = cur; if (t != null && t.host == Pages.HOST) t.web?.reload()
+        if (requestCode == REQ_LOCATION) {
+            val granted = grantResults.any { it == PackageManager.PERMISSION_GRANTED }
+            val cb = geoCallback; val org = geoOrigin
+            geoCallback = null; geoOrigin = null
+            if (cb != null && org != null) cb.invoke(org, granted, false)
+            if (granted) { val t = cur; if (t != null && t.host == Pages.HOST) t.web?.reload() }
         }
     }
 
@@ -910,9 +916,14 @@ class MainActivity : Activity() {
             if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)) {
                 // This marker is intentionally separate: it proves the page received
                 // a script before its own JavaScript, rather than via late fallback.
-                androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, "window.__mxDocumentStart=1;", setOf("*"))
+                androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, "try{Object.defineProperty(window,'__mxDocumentStart',{value:1,enumerable:false,configurable:true});}catch(e){window.__mxDocumentStart=1;}", setOf("*"))
                 androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, Scripts.TIMER_ENGINE, setOf("*"))
                 if (AdBlocker.enabled() && AdBlocker.adsOn()) androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, Stealth.DOC_START, setOf("*"))
+                // إخفاء مبكر للإعلانات قبل أي سكريبت من الموقع: كشف المانع بيقيس عناصر الـ bait
+                // في أول لحظة، ولو الإخفاء اتأخر لحد onPageStarted بيبان الإعلان وبتنكشف الحماية
+                if (AdBlocker.enabled()) Scripts.earlyCosmetic(AdBlocker.adsOn(), AdBlocker.annoyOn())?.let {
+                    androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, it, setOf("*"))
+                }
                 if (Cfg.bool(Cfg.FP, true)) {
                     androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, Scripts.harden(tab.privacySeed), setOf("*"))
                 }
@@ -1141,12 +1152,22 @@ class MainActivity : Activity() {
                 tab.blocked.incrementAndGet()
                 AdBlocker.noteBlocked(host, cat)
                 if (cat == Cat.SPY) io.execute { db.addSpyLog(host, tab.host, "known_spy", 95, "حُجب تلقائيًا") }
-                // A blocked network resource must fail at the WebView network layer.
-                // Returning Stealth.response() supplies HTTP 200 with a synthetic body,
-                // so ad-block test pages (fetch/XHR and resource probes) count it as loaded.
-                // Keep anti-adblock spoofing in the document-start layer; do not fake a
-                // successful network response for a resource we claim to have blocked.
-                return blockedResponse()
+                // Hybrid stealth: الموارد الثابتة (سكريبت/صورة/ستايل/آيفريم) بترجع رد 200 سليم شكلاً
+                // عشان فحوصات "مانع الإعلانات" (بتعتمد على تحميل سكريبت/صورة bait) تشوفها اتحمّلت،
+                // بينما طلبات fetch/XHR (اللي صفحات اختبار الحجب بتستخدمها) لسه بتفشل وتتسجّل محجوبة.
+                val dest = req.requestHeaders["Sec-Fetch-Dest"]?.lowercase().orEmpty()
+                val staticRes = when (dest) {
+                    "script", "image", "style", "font", "iframe", "object", "audio", "video", "track" -> true
+                    "empty", "document" -> false
+                    else -> when (NetworkRuleEngine.inferType(uri.toString(), req.requestHeaders["Accept"], false)) {
+                        NetworkRuleEngine.ResourceType.SCRIPT, NetworkRuleEngine.ResourceType.IMAGE,
+                        NetworkRuleEngine.ResourceType.STYLESHEET, NetworkRuleEngine.ResourceType.FONT,
+                        NetworkRuleEngine.ResourceType.MEDIA, NetworkRuleEngine.ResourceType.OBJECT,
+                        NetworkRuleEngine.ResourceType.SUBDOCUMENT -> true
+                        else -> false
+                    }
+                }
+                return if (staticRes) Stealth.response(uri, req.requestHeaders) else blockedResponse()
             }
             if (videoRegex.containsMatchIn(uri.path.orEmpty() + "?")) addVideo(tab, uri.toString())
             return null
@@ -1405,14 +1426,16 @@ class MainActivity : Activity() {
         }
 
         override fun onGeolocationPermissionsShowPrompt(origin: String?, callback: android.webkit.GeolocationPermissions.Callback?) {
-            if (origin != null && origin.startsWith("https://" + Pages.HOST)) {
-                val granted = checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                if (granted) { callback?.invoke(origin, true, false); return }
-                requestPermissions(arrayOf(android.Manifest.permission.ACCESS_COARSE_LOCATION), REQ_LOCATION)
-                callback?.invoke(origin, false, false)
-                return
-            }
-            callback?.invoke(origin, false, false)
+            val cb = callback ?: return
+            if (origin == null || !origin.startsWith("https://" + Pages.HOST)) { cb.invoke(origin, false, false); return }
+            val fine = checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            val coarse = checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            if (fine || coarse) { cb.invoke(origin, true, false); return }
+            if (geoCallback != null) { cb.invoke(origin, false, false); return }  // في طلب صلاحية لسه معلّق
+            // بنعلّق الرد على طلب الصفحة لحد ما المستخدم يجاوب على مربع صلاحية النظام،
+            // بدل ما نرفض فورًا والصفحة تقع في إحداثيات القاهرة الافتراضية
+            geoCallback = cb; geoOrigin = origin
+            requestPermissions(arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION), REQ_LOCATION)
         }
 
         override fun onCreateWindow(view: WebView?, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message?): Boolean {

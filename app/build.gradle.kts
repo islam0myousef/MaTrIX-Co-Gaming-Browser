@@ -16,8 +16,8 @@ android {
         applicationId = "com.matrixco.browser"
         minSdk = 23
         targetSdk = 35
-        versionCode = 506
-        versionName = "5.0.6"
+        versionCode = 507
+        versionName = "5.0.7"
     }
 
     signingConfigs {
@@ -40,8 +40,8 @@ android {
             if (!System.getenv("MX_KEYSTORE").isNullOrBlank()) {
                 signingConfig = signingConfigs.getByName("release")
             }
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

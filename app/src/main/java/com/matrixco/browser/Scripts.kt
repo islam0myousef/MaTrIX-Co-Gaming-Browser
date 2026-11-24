@@ -170,12 +170,13 @@ object Scripts {
     }
   }catch(error){}
 
-  W.__mxTimer={
+  var api={
     setSpeed:setSpeed,
     reset:function(){ setSpeed(1); },
     realNow:realNow,
     getSpeed:function(){ return speed; }
   };
+  try{ Object.defineProperty(W,'__mxTimer',{value:api,enumerable:false,configurable:true,writable:true}); }catch(e){ W.__mxTimer=api; }
 })();
 """
 
@@ -551,7 +552,12 @@ if(mode!==0) startScan(); else { sc=oSI(function(){ if(ANNOY&&++ticks<70) unwall
 if(window.__mxH) return;
 try{ Object.defineProperty(window,'__mxH',{value:'4.3.3',configurable:false}); }catch(e){ window.__mxH='4.3.3'; }
 var W=window, N=navigator;
-function def(o,k,v){ try{ Object.defineProperty(o,k,{get:function(){return v;},configurable:true}); }catch(e){} }
+/* قناع الدوال: أي دالة بنستبدلها لازم toString بتاعها يبان native، وإلا كاشف البوت
+   يقرأ كود الجافاسكريبت بتاعنا ويعرف إن المتصفح معدّل */
+var NS=new WeakMap(), oTS=Function.prototype.toString;
+function mask(f,n){ try{ NS.set(f,'function '+n+'() { [native code] }'); }catch(e){} return f; }
+try{ var nts=function toString(){ var r=NS.get(this); return r!==undefined?r:oTS.call(this); }; NS.set(nts,'function toString() { [native code] }'); Function.prototype.toString=nts; }catch(e){}
+function def(o,k,v){ try{ Object.defineProperty(o,k,{get:mask(function(){return v;},'get '+k),configurable:true}); }catch(e){} }
 function kill(o,k){ try{ Object.defineProperty(o,k,{value:undefined,configurable:true,writable:true}); }catch(e){ try{ o[k]=undefined; }catch(e2){} } }
 var tabSeed=(%%SEED%%)>>>0;
 if(!tabSeed) tabSeed=0x6D2B79F5;
@@ -574,14 +580,14 @@ def(N,'deviceMemory',8);
 
 /* 2) الواجهات الحساسة: بطارية، بلوتوث، USB، Serial، HID، NFC، MIDI، حساسات الحركة */
 ['getBattery','bluetooth','usb','serial','hid','getInstalledRelatedApps','wakeLock'].forEach(function(k){ kill(N,k); try{ kill(Navigator.prototype,k); }catch(e){} });
-try{ N.requestMIDIAccess=function(){ return Promise.reject(new DOMException('Permission denied','SecurityError')); }; }catch(e){}
+try{ N.requestMIDIAccess=mask(function requestMIDIAccess(){ return Promise.reject(new DOMException('Permission denied','SecurityError')); },'requestMIDIAccess'); }catch(e){}
 ['NDEFReader','Accelerometer','Gyroscope','Magnetometer','AbsoluteOrientationSensor','RelativeOrientationSensor','LinearAccelerationSensor','GravitySensor','AmbientLightSensor','Bluetooth','USB','Serial','HID'].forEach(function(k){ kill(W,k); });
 try{
   var oAEL=EventTarget.prototype.addEventListener;
-  EventTarget.prototype.addEventListener=function(t){
+  EventTarget.prototype.addEventListener=mask(function addEventListener(t){
     if(t==='deviceorientation'||t==='deviceorientationabsolute'||t==='devicemotion') return;
     return oAEL.apply(this,arguments);
-  };
+  },'addEventListener');
   ['ondeviceorientation','ondeviceorientationabsolute','ondevicemotion'].forEach(function(k){ try{ Object.defineProperty(W,k,{get:function(){return null;},set:function(){},configurable:true}); }catch(e){} });
 }catch(e){}
 
@@ -591,31 +597,48 @@ try{
   if(P&&P.query){
     var oQ=P.query.bind(P);
     var DENY={'midi':1,'camera':1,'microphone':1,'geolocation':1,'notifications':1,'clipboard-read':1,'clipboard-write':1,'persistent-storage':1,'background-sync':1,'background-fetch':1,'accelerometer':1,'gyroscope':1,'magnetometer':1,'ambient-light-sensor':1,'bluetooth':1,'nfc':1,'push':1,'screen-wake-lock':1,'display-capture':1,'idle-detection':1,'window-placement':1,'storage-access':1,'local-fonts':1,'payment-handler':1,'speaker-selection':1};
-    P.query=function(d){
+    P.query=mask(function query(d){
       try{
         var n=d&&d.name;
         if(n&&DENY[n]){ return Promise.resolve({name:n,state:'denied',onchange:null,addEventListener:function(){},removeEventListener:function(){},dispatchEvent:function(){return false;}}); }
       }catch(e){}
       return oQ(d);
-    };
+    },'query');
   }
+}catch(e){}
+
+/* 3.5) الـ UA بيقول Chrome، فلازم userAgentData و window.chrome يطابقوه — وجود علامة
+   Android WebView في brands أو غياب window.chrome أشهر إشارات كشف البوت والمتصفحات المعدّلة */
+try{
+  var mUa=/(?:Chrome|Chromium)\/(\d+)/.exec(N.userAgent||''); var cv=mUa?mUa[1]:'120';
+  var mAv=/Android (\d+(?:\.\d+)*)/.exec(N.userAgent||''); var av=mAv?mAv[1]:'14';
+  var brands=[{brand:'Not_A Brand',version:'8'},{brand:'Chromium',version:cv},{brand:'Google Chrome',version:cv}];
+  var fullList=[{brand:'Not_A Brand',version:'8.0.0.0'},{brand:'Chromium',version:cv+'.0.0.0'},{brand:'Google Chrome',version:cv+'.0.0.0'}];
+  var uad={ brands:brands, mobile:true, platform:'Android',
+    getHighEntropyValues:mask(function getHighEntropyValues(){ return Promise.resolve({ architecture:'', bitness:'64', brands:brands, fullVersionList:fullList, mobile:true, model:'', platform:'Android', platformVersion:av+'.0.0', uaFullVersion:cv+'.0.0.0', wow64:false }); },'getHighEntropyValues'),
+    toJSON:function(){ return {brands:brands,mobile:true,platform:'Android'}; } };
+  if('userAgentData' in N){ def(N,'userAgentData',uad); try{ def(Navigator.prototype,'userAgentData',uad); }catch(e){} }
+}catch(e){}
+try{
+  if(!W.chrome) Object.defineProperty(W,'chrome',{value:{ app:{isInstalled:false}, runtime:{}, csi:function(){return{};}, loadTimes:function(){return{};} },configurable:true});
 }catch(e){}
 
 /* 4) الكاميرا والمايك: مفيش أجهزة ظاهرة لحد ما يتمنح الإذن */
 try{
   var MD=N.mediaDevices;
-  if(MD&&MD.enumerateDevices){ MD.enumerateDevices=function(){ return Promise.resolve([]); }; }
+  if(MD&&MD.enumerateDevices){ MD.enumerateDevices=mask(function enumerateDevices(){ return Promise.resolve([]); },'enumerateDevices'); }
 }catch(e){}
 
-/* 5) WebGL: اسم كارت الشاشة والمصنّع قيمة عامة موحدة */
+/* 5) WebGL: اسم كارت شاشة واقعي لموبايل أندرويد — القيمة العامة القديمة
+   (Generic GPU) كانت علامة مؤكدة عند كواشف البوت إن الجهاز مش حقيقي */
 function patchGL(proto){
   if(!proto) return;
   var o=proto.getParameter;
-  proto.getParameter=function(p){
-    if(p===37445) return 'Google Inc. (Generic)';
-    if(p===37446) return 'ANGLE (Generic, Generic GPU, OpenGL ES 3.0)';
+  proto.getParameter=mask(function getParameter(p){
+    if(p===37445) return 'Qualcomm';
+    if(p===37446) return 'ANGLE (Qualcomm, Adreno (TM) 650, OpenGL ES 3.2)';
     return o.apply(this,arguments);
-  };
+  },'getParameter');
 }
 try{ patchGL(W.WebGLRenderingContext&&WebGLRenderingContext.prototype); }catch(e){}
 try{ patchGL(W.WebGL2RenderingContext&&WebGL2RenderingContext.prototype); }catch(e){}
@@ -643,7 +666,7 @@ try{
   function smallCanvas(c){
     return !!c && c.width>0 && c.height>0 && c.width*c.height<=200000;
   }
-  CX.getImageData=function(x,y,w,h){
+  CX.getImageData=mask(function getImageData(x,y,w,h){
     var r=oGI.apply(this,arguments);
     try{
       /* getImageData returns a detached pixel buffer. Mutating this buffer
@@ -653,7 +676,7 @@ try{
         jitter(r.data,r.width,r.height);
     }catch(e){}
     return r;
-  };
+  },'getImageData');
   function noisy(c){
     try{
       if(!smallCanvas(c)) return c;
@@ -666,12 +689,12 @@ try{
       return n;
     }catch(e){ return c; }
   }
-  CP.toDataURL=function(){
+  CP.toDataURL=mask(function toDataURL(){
     return oTD.apply(noisy(this),arguments);
-  };
-  CP.toBlob=function(){
+  },'toDataURL');
+  CP.toBlob=mask(function toBlob(){
     return oTB.apply(noisy(this),arguments);
-  };
+  },'toBlob');
   try{
     Object.defineProperty(W,'__mxCanvasProtection',{value:'4.3.3',configurable:false});
   }catch(e){ W.__mxCanvasProtection='4.3.3'; }
@@ -684,25 +707,25 @@ try{
   var AN=W.AnalyserNode&&AnalyserNode.prototype;
   if(AN){
     var oFF=AN.getFloatFrequencyData;
-    if(oFF) AN.getFloatFrequencyData=function(a){
+    if(oFF) AN.getFloatFrequencyData=mask(function getFloatFrequencyData(a){
       oFF.apply(this,arguments);
       try{ for(var i=0;i<a.length;i+=7){ if(isFinite(a[i])) a[i]+=(unitNoise(i+809)-0.5)*0.002; } }catch(e){}
-    };
+    },'getFloatFrequencyData');
     var oBF=AN.getByteFrequencyData;
-    if(oBF) AN.getByteFrequencyData=function(a){
+    if(oBF) AN.getByteFrequencyData=mask(function getByteFrequencyData(a){
       oBF.apply(this,arguments);
       try{ for(var i=0;i<a.length;i+=11){ a[i]=Math.max(0,Math.min(255,a[i]+(Math.floor(unitNoise(i+1201)*3)-1))); } }catch(e){}
-    };
+    },'getByteFrequencyData');
     var oFT=AN.getFloatTimeDomainData;
-    if(oFT) AN.getFloatTimeDomainData=function(a){
+    if(oFT) AN.getFloatTimeDomainData=mask(function getFloatTimeDomainData(a){
       oFT.apply(this,arguments);
       try{ for(var i=0;i<a.length;i+=13){ if(isFinite(a[i])) a[i]+=(unitNoise(i+1601)-0.5)*0.000002; } }catch(e){}
-    };
+    },'getFloatTimeDomainData');
     var oBT=AN.getByteTimeDomainData;
-    if(oBT) AN.getByteTimeDomainData=function(a){
+    if(oBT) AN.getByteTimeDomainData=mask(function getByteTimeDomainData(a){
       oBT.apply(this,arguments);
       try{ for(var i=0;i<a.length;i+=17){ a[i]=Math.max(0,Math.min(255,a[i]+(Math.floor(unitNoise(i+1901)*3)-1))); } }catch(e){}
-    };
+    },'getByteTimeDomainData');
   }
 }catch(e){}
 
@@ -711,7 +734,7 @@ var STD={'serif':1,'sans-serif':1,'monospace':1,'cursive':1,'fantasy':1,'system-
 function famKey(s){ return String(s).split(',')[0].trim().replace(/['"]/g,'').toLowerCase(); }
 try{
   var oMT=CanvasRenderingContext2D.prototype.measureText;
-  CanvasRenderingContext2D.prototype.measureText=function(t){
+  CanvasRenderingContext2D.prototype.measureText=mask(function measureText(t){
     try{
       var f=this.font;
       var m=/^(.*?\d+(?:\.\d+)?(?:px|pt|em|rem|%)(?:\/\S+)?)\s+(.+)$/.exec(f);
@@ -722,7 +745,7 @@ try{
       }
     }catch(e){}
     return oMT.call(this,t);
-  };
+  },'measureText');
 }catch(e){}
 try{
   var hide=function(el){
@@ -736,13 +759,13 @@ try{
     var d=Object.getOwnPropertyDescriptor(HTMLElement.prototype,k);
     if(!d||!d.get) return;
     var g=d.get;
-    Object.defineProperty(HTMLElement.prototype,k,{configurable:true,get:function(){
+    Object.defineProperty(HTMLElement.prototype,k,{configurable:true,get:mask(function(){
       try{
         var s=hide(this);
         if(s){ var old=s.fontFamily, parts=old.split(','); var last=parts[parts.length-1].trim().replace(/['"]/g,'').toLowerCase(); s.fontFamily=STD[last]?last:'sans-serif'; var v=g.call(this); s.fontFamily=old; return v; }
       }catch(e){}
       return g.call(this);
-    }});
+    },'get '+k)});
   });
 }catch(e){}
 })();
@@ -768,6 +791,16 @@ try{
             .replace("%%FP%%", fp.toString())
             .replace("%%BG%%", bg.toString())
             .replace("%%POL%%", "[$pol]")
+    }
+
+    /** CSS مبكر بيتركب عند document-start: بيخبي حاويات الإعلانات المعروفة قبل ما سكريبتات
+        كشف مانع الإعلانات تقيسها — بيرجع null لو مفيش حاجة تتخبى */
+    fun earlyCosmetic(ads: Boolean, annoy: Boolean): String? {
+        val sel = listOfNotNull(if (ads) ADS_SEL else null, if (annoy) ANNOY_SEL else null).joinToString(",")
+        if (sel.isEmpty()) return null
+        return "(function(){try{var SEL=" + org.json.JSONObject.quote(sel) +
+            ";function put(){if(document.getElementById('__mxearly'))return;var st=document.createElement('style');st.id='__mxearly';st.textContent=SEL+'{display:none!important}';(document.head||document.documentElement).appendChild(st);}put();" +
+            "new MutationObserver(function(){if(!document.getElementById('__mxearly'))put();}).observe(document.documentElement,{childList:true});}catch(e){}})();"
     }
 
     /** إخفاء عناصر من قوائم التصفية — بيقسّم المجموعة لو فيها selector غلط بدل ما يبوّظ الباقي */
