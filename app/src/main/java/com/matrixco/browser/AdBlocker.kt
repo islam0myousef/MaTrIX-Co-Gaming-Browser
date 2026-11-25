@@ -54,7 +54,7 @@ object AdBlocker {
     val sessionBlocked = AtomicInteger(0)
 
     private val adHostRegex = Regex("^(ad|ads|adserver|adservice|adtech|adx|banner|banners|pagead|popads|popunder)[0-9]*\\.")
-    private val antiAdblock = arrayOf("fuckadblock", "blockadblock", "adblock-detect", "adblockdetect", "detectadblock", "ad-block-detect")
+    private val antiAdblock = arrayOf("fuckadblock", "blockadblock", "adblock-detect", "adblockdetect", "detectadblock", "ad-block-detect", "anti-adblock", "antiadblock", "adblock-notify", "adblocker-detect", "adb-detect", "adbdetect", "ad-blocker-detect")
     private val adPatterns = arrayOf(
         "/adserver/", "/adserve/", "/ads/banner", "/pagead/", "/adframe", "/adview/", "/advert/", "/adverts/",
         "adsbygoogle", "/popunder", "/popads", "/prebid", "/ads.js", "/ad.js", "/showads", "/adsense/",

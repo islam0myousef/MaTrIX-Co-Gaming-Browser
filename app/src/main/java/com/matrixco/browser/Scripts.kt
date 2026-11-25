@@ -855,6 +855,91 @@ try{ ['hyperlinkAuditing'].forEach(function(){}); var oc=W.HTMLAnchorElement&&HT
         }
     }
 
+    /** Element picker: tap an element, confirm, it is hidden and saved for this site. No dollar signs (Kotlin raw string). */
+    val PICKER = """
+(function(){
+  if(window.__mxPick){ window.__mxPick(); return 'toggle'; }
+  var on=false, cur=null, box=null, bar=null, ov=null;
+  function sel(el){
+    try{
+      if(el.id&&document.querySelectorAll('#'+CSS.escape(el.id)).length===1) return '#'+CSS.escape(el.id);
+      var parts=[], n=el;
+      while(n&&n.nodeType===1&&n!==document.documentElement&&parts.length<6){
+        var p=n.tagName.toLowerCase();
+        if(n.id&&document.querySelectorAll('#'+CSS.escape(n.id)).length===1){ parts.unshift('#'+CSS.escape(n.id)); break; }
+        var cl=(typeof n.className==='string'?n.className:'').trim().split(/\s+/).filter(function(c){return c&&c.length<40&&!/[0-9]{3,}/.test(c)&&c.indexOf('__mx')<0}).slice(0,2);
+        if(cl.length) p+='.'+cl.map(function(c){return CSS.escape(c)}).join('.');
+        var par=n.parentElement;
+        if(par){ var same=Array.prototype.filter.call(par.children,function(c){return c.tagName===n.tagName}); if(same.length>1) p+=':nth-of-type('+(same.indexOf(n)+1)+')'; }
+        parts.unshift(p);
+        var cand=parts.join(' > ');
+        try{ if(document.querySelectorAll(cand).length===1) return cand; }catch(e){}
+        n=n.parentElement;
+      }
+      return parts.join(' > ');
+    }catch(e){ return ''; }
+  }
+  function mine(el){ return el&&el.closest&&el.closest('[data-mxpick]'); }
+  function mark(el){
+    cur=el; if(!box) return;
+    if(!el){ box.style.display='none'; return; }
+    var r=el.getBoundingClientRect();
+    box.style.cssText='position:fixed;pointer-events:none;z-index:2147483646;border:2px solid #ff3b30;background:rgba(255,59,48,.22);border-radius:4px;left:'+r.left+'px;top:'+r.top+'px;width:'+r.width+'px;height:'+r.height+'px;display:block';
+    lbl.textContent=(el.tagName.toLowerCase())+' '+Math.round(r.width)+'x'+Math.round(r.height);
+  }
+  var lbl;
+  function btn(t,bg,f){ var b=document.createElement('button'); b.textContent=t; b.setAttribute('data-mxpick','1'); b.style.cssText='flex:1;background:'+bg+';color:#fff;border:0;border-radius:10px;padding:10px 4px;font:600 14px sans-serif;margin:0 3px'; b.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();f();},true); return b; }
+  function stop(e){ if(mine(e.target)) return; e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); }
+  function tapHandler(e){
+    if(mine(e.target)) return;
+    stop(e);
+    var t=e.changedTouches&&e.changedTouches[0]; var x=t?t.clientX:e.clientX, y=t?t.clientY:e.clientY;
+    var el=document.elementFromPoint(x,y);
+    if(!el||el===document.documentElement||el===document.body||mine(el)) return;
+    mark(el);
+  }
+  function hideIt(){
+    if(!cur) return; var s=sel(cur); if(!s){ stopPick(); return; }
+    var st=document.getElementById('__mxuh'); if(!st){ st=document.createElement('style'); st.id='__mxuh'; (document.head||document.documentElement).appendChild(st); }
+    st.textContent+=s+'{display:none!important}\n';
+    console.log('MX_HIDE:'+s);
+    cur=null; mark(null);
+  }
+  function stopPick(){
+    on=false;
+    ['click','touchstart','touchend','mousedown','mouseup','pointerdown','pointerup'].forEach(function(n){ document.removeEventListener(n,evh,true); });
+    if(box) box.remove(); if(bar) bar.remove(); box=bar=null;
+  }
+  function evh(e){ if(e.type==='click'||e.type==='touchend') tapHandler(e); else stop(e); }
+  function start(){
+    on=true;
+    box=document.createElement('div'); box.setAttribute('data-mxpick','1');
+    lbl=document.createElement('div'); lbl.style.cssText='position:absolute;left:0;top:-20px;background:#ff3b30;color:#fff;font:11px sans-serif;padding:2px 6px;border-radius:4px;white-space:nowrap'; box.appendChild(lbl);
+    bar=document.createElement('div'); bar.setAttribute('data-mxpick','1');
+    bar.style.cssText='position:fixed;left:8px;right:8px;bottom:12px;z-index:2147483647;background:rgba(20,20,24,.95);border-radius:14px;padding:10px;display:flex;flex-direction:column;direction:rtl';
+    var msg=document.createElement('div'); msg.setAttribute('data-mxpick','1'); msg.textContent='اضغط على العنصر اللي عاوز تخفيه'; msg.style.cssText='color:#fff;font:13px sans-serif;text-align:center;margin-bottom:8px'; bar.appendChild(msg);
+    var row=document.createElement('div'); row.setAttribute('data-mxpick','1'); row.style.cssText='display:flex';
+    row.appendChild(btn('تأكيد الإخفاء','#e81e28',hideIt));
+    row.appendChild(btn('العنصر الأكبر','#3a3a44',function(){ if(cur&&cur.parentElement&&cur.parentElement!==document.body&&cur.parentElement!==document.documentElement) mark(cur.parentElement); }));
+    row.appendChild(btn('تم','#2a7a45',stopPick));
+    bar.appendChild(row);
+    document.documentElement.appendChild(box); document.documentElement.appendChild(bar);
+    ['click','touchstart','touchend','mousedown','mouseup','pointerdown','pointerup'].forEach(function(n){ document.addEventListener(n,evh,true); });
+  }
+  window.__mxPick=function(){ if(on) stopPick(); else start(); };
+  start(); return 'start';
+})()
+"""
+
+    /** Saved per-site hidden elements (from the picker). Applied on every load, and watched so late DOM cannot bring them back. */
+    fun userHide(sels: List<String>): String {
+        val arr = org.json.JSONArray(sels).toString()
+        return "(function(S){try{var o=document.getElementById('__mxuh2');if(o)o.remove();var st=document.createElement('style');st.id='__mxuh2';" +
+            "st.textContent=S.map(function(s){return s+'{display:none!important}'}).join('\\n');(document.head||document.documentElement).appendChild(st);" +
+            "if(!window.__mxUhObs){window.__mxUhObs=new MutationObserver(function(){if(!document.getElementById('__mxuh2')){(document.head||document.documentElement).appendChild(st)}});window.__mxUhObs.observe(document.documentElement,{childList:true})}}catch(e){}})($arr)"
+    }
+
+
     val READER = """
 (function(){
   var old=document.getElementById('__mxread');

@@ -70,7 +70,7 @@ try{ var nts=function toString(){ var r=NS.get(this); return r!==undefined?r:oTS
 function def(k,v){ try{ if(!(k in W)) Object.defineProperty(W,k,{value:v,writable:true,configurable:true,enumerable:true}); }catch(e){} }
 
 /* كائنات الإعلانات اللي المواقع بتفحصها */
-def('canRunAds',true); def('isAdBlockActive',false); def('adblock',false);
+def('canRunAds',true); def('adBlockerDetected',false); def('adblockDetected',false); def('blockAdBlock_detected',false); def('google_ad_client','ca-pub-0'); def('showAds',true); def('isAdsBlocked',false); def('hasAdblock',false); def('isAdBlockActive',false); def('adblock',false);
 def('adBlockDetected',false); def('adBlockEnabled',false); def('adsBlocked',false);
 def('adsbygoogle',(function(){ var a=[]; a.loaded=true; return a; })());
 var P=new Proxy(function(){},{get:function(t,k){ if(typeof k==='symbol') return k===Symbol.toPrimitive?function(){return '';}:undefined; return k==='then'?undefined:P; },apply:function(){ return P; }});
@@ -111,6 +111,43 @@ try{
     return cs;
   },'getComputedStyle');
 }catch(e){}
+/* anti-adblock wall remover: full-screen overlays/modals that talk about ad blockers get removed and scrolling restored */
+(function(){
+  var KW=/(ad[\s-]?block|ads?[\s-]?blocker|block(ing)? ads|disable (your )?(ad|block)|whitelist (us|this)|turn off (your )?(ad|block)|مانع (الإ|ال)علانات|مانع الاعلانات|عطّل (مانع|حاجب)|عطل (مانع|حاجب))/i;
+  function big(el){ try{ var r=el.getBoundingClientRect(); return r.width>=innerWidth*0.55&&r.height>=innerHeight*0.25; }catch(e){ return false; } }
+  function isWall(el){
+    try{
+      if(!el||el.nodeType!==1||el.id==='__mxread'||el.hasAttribute('data-mxpick')) return false;
+      var cs=getComputedStyle(el); if(cs.position!=='fixed'&&cs.position!=='absolute'&&cs.position!=='sticky') return false;
+      var t=(el.innerText||el.textContent||''); if(t.length<8||t.length>1500) return false;
+      if(!KW.test(t)) return false;
+      return big(el)||(parseInt(cs.zIndex,10)||0)>=1000;
+    }catch(e){ return false; }
+  }
+  function unlock(){
+    try{ [document.documentElement,document.body].forEach(function(n){ if(!n) return; var c=getComputedStyle(n); if(c.overflow==='hidden'||c.overflowY==='hidden'){ n.style.setProperty('overflow','auto','important'); } n.style.setProperty('pointer-events','auto','important'); n.classList.remove('modal-open','no-scroll','noscroll','overflow-hidden','adblock-active'); }); }catch(e){}
+  }
+  var busy=false;
+  function scan(root){
+    if(busy) return; busy=true;
+    try{
+      var found=false;
+      var list=(root&&root.nodeType===1)?[root].concat(Array.prototype.slice.call(root.querySelectorAll('div,section,aside,dialog,iframe'))):[];
+      for(var i=0;i<list.length&&i<400;i++){
+        if(isWall(list[i])){ list[i].style.setProperty('display','none','important'); try{ list[i].remove(); }catch(e){} found=true; }
+      }
+      if(found) unlock();
+    }catch(e){}
+    busy=false;
+  }
+  var timer=0;
+  function later(n){ if(timer) return; timer=setTimeout(function(){ timer=0; scan(n&&n.nodeType===1?n:document.body); },150); }
+  try{
+    var mo=new MutationObserver(function(ms){ for(var i=0;i<ms.length;i++){ var a=ms[i].addedNodes; for(var j=0;j<a.length;j++){ if(a[j].nodeType===1){ later(document.body); return; } } } });
+    var go=function(){ if(document.documentElement) mo.observe(document.documentElement,{childList:true,subtree:true}); };
+    go(); document.addEventListener('DOMContentLoaded',function(){ scan(document.body); setTimeout(function(){ scan(document.body); },1200); setTimeout(function(){ scan(document.body); },3500); });
+  }catch(e){}
+})();
 })();
 """
 }

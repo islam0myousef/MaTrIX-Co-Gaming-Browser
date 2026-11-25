@@ -4,6 +4,7 @@ import android.app.Dialog
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.pm.PackageManager
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.graphics.Color
@@ -72,7 +73,23 @@ object Updater {
                 val a = assets.getJSONObject(i)
                 val url = a.optString("browser_download_url")
                 if (a.optString("name").endsWith(".apk") && url.startsWith(PREFIX)) {
-                    val d = a.optString("digest", "")
+                    var d = a.optString("digest", "")
+                    if (!d.startsWith("sha256:")) {
+                        // fallback: ملف <apk>.sha256 جنب الـ APK في نفس الـ Release
+                        for (j in 0 until assets.length()) {
+                            val sa = assets.getJSONObject(j)
+                            val su = sa.optString("browser_download_url")
+                            if (sa.optString("name") == a.optString("name") + ".sha256" && su.startsWith(PREFIX)) {
+                                try {
+                                    val sc = URL(su).openConnection() as HttpURLConnection
+                                    sc.connectTimeout = 10000; sc.readTimeout = 10000; sc.setRequestProperty("User-Agent", "MaTrIX-Co-Updater")
+                                    val tok = sc.inputStream.bufferedReader().use { it.readText() }.trim().split(Regex("\\s+")).firstOrNull().orEmpty()
+                                    sc.disconnect()
+                                    if (tok.matches(Regex("[0-9a-fA-F]{64}"))) d = "sha256:$tok"
+                                } catch (_: Exception) {}
+                            }
+                        }
+                    }
                     return Info(tag, tag.removePrefix("v"), (if (o.isNull("body")) "" else o.optString("body", "").trim().let { if (it.equals("null", true)) "" else it }).take(800), url, a.optLong("size"),
                         if (d.startsWith("sha256:")) d.removePrefix("sha256:") else null)
                 }
@@ -167,7 +184,32 @@ object Updater {
     }
 
     /** بيسلّم الـ APK لمثبّت أندرويد (بيطلب منك التأكيد) */
+    /** بيتأكد إن الـ APK بتاع نفس التطبيق، موقّع بنفس شهادتك، ورقمه أعلى من المثبّت. بيرمي استثناء لو أي شرط فشل. */
+    @Suppress("DEPRECATION")
+    fun verifyApk(ctx: Context, f: File) {
+        val pm = ctx.packageManager
+        val flags = if (Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES
+        val archive = pm.getPackageArchiveInfo(f.absolutePath, flags) ?: throw IOException("ملف التحديث مش APK صالح")
+        if (archive.packageName != ctx.packageName) throw IOException("التحديث ده لتطبيق تاني، اترفض")
+        val installed = pm.getPackageInfo(ctx.packageName, flags)
+        val newCode = if (Build.VERSION.SDK_INT >= 28) archive.longVersionCode else archive.versionCode.toLong()
+        val curCode = if (Build.VERSION.SDK_INT >= 28) installed.longVersionCode else installed.versionCode.toLong()
+        if (newCode <= curCode) throw IOException("التحديث ده أقدم أو نفس النسخة المثبّتة")
+        fun certs(pi: android.content.pm.PackageInfo): Set<String> {
+            val sigs = if (Build.VERSION.SDK_INT >= 28) {
+                val si = pi.signingInfo ?: return emptySet()
+                if (si.hasMultipleSigners()) si.apkContentsSigners else si.signingCertificateHistory
+            } else pi.signatures
+            val out = HashSet<String>()
+            for (sg in sigs ?: emptyArray()) out.add(MessageDigest.getInstance("SHA-256").digest(sg.toByteArray()).joinToString("") { "%02x".format(it) })
+            return out
+        }
+        val a = certs(archive); val b = certs(installed)
+        if (a.isEmpty() || b.isEmpty() || a.intersect(b).isEmpty()) { f.delete(); throw IOException("توقيع التحديث مش مطابق لتوقيع التطبيق المثبّت، اترفض وتم مسح الملف") }
+    }
+
     fun install(ctx: Context, f: File) {
+        verifyApk(ctx, f)
         val pi = ctx.packageManager.packageInstaller
         val id = pi.createSession(PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL))
         val s = pi.openSession(id)

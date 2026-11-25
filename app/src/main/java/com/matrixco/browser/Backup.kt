@@ -79,4 +79,25 @@ object Backup {
         }
         return n
     }
+
+    /** ملف مفضلة HTML (Netscape format) زي اللي بيطلّعه Opera و Chrome و Firefox */
+    fun isBookmarksHtml(text: String): Boolean {
+        val h = text.take(3000).lowercase()
+        return h.contains("<dt>") && h.contains("<a ") || h.contains("netscape-bookmark")
+    }
+
+    fun importBookmarksHtml(ctx: Context, text: String): Int {
+        val db = ShieldDatabase.getInstance(ctx)
+        val re = Regex("<a\\s[^>]*?href=\"([^\"]+)\"[^>]*>(.*?)</a>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+        var n = 0
+        for (m in re.findAll(text)) {
+            val url = m.groupValues[1].trim()
+            if (!url.startsWith("http://") && !url.startsWith("https://")) continue
+            val title = android.text.Html.fromHtml(m.groupValues[2], android.text.Html.FROM_HTML_MODE_LEGACY).toString().trim().ifEmpty { url }
+            db.addBookmark(url, title.take(200)); n++
+            if (n >= 5000) break
+        }
+        if (n == 0) throw IllegalArgumentException("no bookmarks")
+        return n
+    }
 }

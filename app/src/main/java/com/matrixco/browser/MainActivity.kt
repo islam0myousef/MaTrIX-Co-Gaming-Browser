@@ -461,10 +461,10 @@ class MainActivity : Activity() {
                     try {
                         val text = contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) } ?: ""
                         if (text.length > 20_000_000) throw IllegalArgumentException("too big")
-                        val n = Backup.import(this, text)
+                        val n = if (Backup.isBookmarksHtml(text)) Backup.importBookmarksHtml(this, text) else Backup.import(this, text)
                         FilterEngine.refreshAsync(this) { _, _ -> }
                         h.post { toast("✅ اتسترجع $n عنصر. القوائم بتتحمّل تاني"); recreate() }
-                    } catch (_: Exception) { h.post { toast("الملف ده مش نسخة احتياطية صالحة") } }
+                    } catch (_: Exception) { h.post { toast("الملف ده مش نسخة احتياطية ولا ملف مفضلة صالح") } }
                 }
             }
             REQ_WALL -> { val u = data?.data; if (resultCode == RESULT_OK && u != null) io.execute { saveWallpaper(u) } }
@@ -845,6 +845,7 @@ class MainActivity : Activity() {
         val idx = tabs.indexOf(tab)
         if (idx < 0) return
         tabs.removeAt(idx)
+        if (!tab.priv && tab.url.startsWith("http") && !isInternal(tab.url)) { closedTabs.add(tab.url); while (closedTabs.size > 15) closedTabs.removeAt(0) }
         webHolder.removeView(tab.web)
         try { tab.web.stopLoading(); tab.web.destroy() } catch (_: Exception) {}
         tab.thumb = null
@@ -1125,6 +1126,12 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun siteKey(host: String): String { val p = host.lowercase().split('.'); return if (p.size <= 2) host.lowercase() else p.takeLast(2).joinToString(".") }
+    private val closedTabs = ArrayList<String>()
+    private fun reopenClosed() {
+        if (closedTabs.isEmpty()) { toast("مفيش تبويب مقفول تفتحه"); return }
+        newTab(closedTabs.removeAt(closedTabs.size - 1))
+    }
     private fun isGameHost(host: String) = GAME_HOSTS.any { host == it || host.endsWith(".$it") }
     private fun hostOf(u: String) = try { Uri.parse(u).host.orEmpty().lowercase() } catch (_: Exception) { "" }
 
@@ -1156,6 +1163,14 @@ class MainActivity : Activity() {
             Scripts.main(host, tab.skipMode, Cfg.bool(Cfg.DARK, false), yt, on && AdBlocker.adsOn(), on && AdBlocker.annoyOn(), spy, Cfg.bool(Cfg.FP, true), Cfg.bool(Cfg.BGAUDIO, false), pol), null
         )
         if (tab.desktop) tab.web.evaluateJavascript(Scripts.desktopViewport(desktopWidth()), null)
+        if (host.isNotEmpty() && !isInternal(tab.url)) {
+            io.execute {
+                try {
+                    val us = getUserHides(host)
+                    if (us.isNotEmpty()) h.post { if (tabs.contains(tab) && tab.host == host) tab.web.evaluateJavascript(Scripts.userHide(us), null) }
+                } catch (_: Throwable) {}
+            }
+        }
         if (on) {
             io.execute {
                 try {
@@ -1325,6 +1340,11 @@ class MainActivity : Activity() {
                             h.post { toast("🛡 تم حجب تحويل إعلاني") }
                             return true
                         }
+                    }
+                    if (gameMode && req.isForMainFrame && !req.hasGesture() && tab.host.isNotEmpty() && host != Pages.HOST && siteKey(host) != siteKey(tab.host)) {
+                        tab.blocked.incrementAndGet(); AdBlocker.noteBlocked(host)
+                        h.post { toast("🎮 وضع اللعب منع تحويل لموقع تاني") }
+                        return true
                     }
                     if (req.isForMainFrame) {
                         if (Build.VERSION.SDK_INT >= 24 && req.isRedirect) tab.redirects++ else tab.redirects = 0
@@ -1503,6 +1523,7 @@ class MainActivity : Activity() {
                 msg.startsWith("MX_FPS:") -> { lastFps = msg.substring(7).toIntOrNull() ?: 0; h.post { updateHud() } }
                 msg.startsWith("MX_VIDEO:") -> addVideo(tab, msg.substring(9))
                 msg.startsWith("MX_SPY:") -> { val j = msg.substring(7); h.post { handleSpy(tab, j) } }
+                msg.startsWith("MX_HIDE:") -> { val sel = msg.substring(8).take(400); val hh = tab.host; io.execute { addUserHide(hh, sel) }; h.post { toast("✅ اتخفى وهيفضل مخفي في الموقع ده") } }
                 msg.startsWith("MX_USERERR:") -> h.post { toast("⚠ خطأ في سكريبت: " + msg.substring(11).take(80)) }
                 else -> return super.onConsoleMessage(m)
             }
@@ -1532,7 +1553,7 @@ class MainActivity : Activity() {
         override fun onCreateWindow(view: WebView?, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message?): Boolean {
             val msg = resultMsg ?: return false
             val now = System.currentTimeMillis()
-            if (!isUserGesture || now - tab.lastPopupAt < 1500 || tabs.size >= 14) {
+            if (gameMode || !isUserGesture || now - tab.lastPopupAt < 1500 || tabs.size >= 14) {
                 tab.blocked.incrementAndGet(); AdBlocker.noteBlocked(tab.host); return false
             }
             tab.lastPopupAt = now
@@ -2091,6 +2112,29 @@ class MainActivity : Activity() {
         fabMenu = null; fabOpen = false
     }
 
+    // ───────── عناصر مخفية بإيدك (لكل موقع) ─────────
+    private fun uhKey(host: String) = "uhide:" + host.lowercase().removePrefix("www.")
+
+    private fun getUserHides(host: String): List<String> = try {
+        val raw = db.getMeta(uhKey(host)).orEmpty()
+        if (raw.isEmpty()) emptyList() else { val a = org.json.JSONArray(raw); (0 until a.length()).map { a.getString(it) } }
+    } catch (_: Throwable) { emptyList() }
+
+    private fun addUserHide(host: String, sel: String) {
+        if (host.isEmpty() || sel.isBlank()) return
+        val l = getUserHides(host).toMutableList()
+        if (!l.contains(sel)) l.add(sel)
+        db.setMeta(uhKey(host), org.json.JSONArray(l.takeLast(200)).toString())
+    }
+
+    private fun clearUserHides(host: String) { db.setMeta(uhKey(host), "") }
+
+    private fun startPicker() {
+        val t = cur ?: return
+        if (isInternal(t.url)) { toast("مينفعش في الصفحات الداخلية"); return }
+        t.web.evaluateJavascript(Scripts.PICKER, null)
+    }
+
     private fun skipNow() {
         val t = cur ?: return
         if (isInternal(t.url)) { toast("مفيش انتظار في الصفحة دي"); return }
@@ -2544,6 +2588,23 @@ class MainActivity : Activity() {
         btns.addView(ui.button("تقرير الدرع", false) { dismissShield(); openInternal("/shield") }, LinearLayout.LayoutParams(0, WRAP, 1f).apply { marginEnd = dp(6) })
         btns.addView(ui.button("⚡ تخطي الانتظار", false) { dismissShield(); skipNow() }, LinearLayout.LayoutParams(0, WRAP, 1f))
         box.addView(btns)
+        box.addView(ui.space(6))
+        val btns2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutDirection = View.LAYOUT_DIRECTION_RTL }
+        btns2.addView(ui.button("🎯 اختر عنصر لإخفائه", false) { dismissShield(); startPicker() }, LinearLayout.LayoutParams(0, WRAP, 1f).apply { marginEnd = dp(6) })
+        btns2.addView(ui.button("🔄 حدّث الفلاتر", false) {
+            toast("جاري تحديث الفلاتر...")
+            RuleUpdater.updateNow(this) { r ->
+                h.post { if (r.success) { AdBlocker.refreshRules(this); toast("🛡 تم تحديث الفلاتر: " + r.domainsCount + " نطاق") } else toast("فشل التحديث: " + r.message.take(60)) }
+            }
+        }, LinearLayout.LayoutParams(0, WRAP, 1f))
+        box.addView(btns2)
+        if (!internal && host.isNotEmpty()) {
+            val nHidden = getUserHides(host).size
+            if (nHidden > 0) {
+                box.addView(ui.space(6))
+                box.addView(ui.button("↩ رجّع العناصر المخفية ($nHidden)", false) { clearUserHides(host); dismissShield(); toast("اترجعت"); reloadSoon() })
+            }
+        }
 
         val maxH = (resources.displayMetrics.heightPixels * 0.78f).toInt()
         box.measure(View.MeasureSpec.makeMeasureSpec(pw, View.MeasureSpec.EXACTLY), View.MeasureSpec.UNSPECIFIED)
@@ -2805,7 +2866,7 @@ class MainActivity : Activity() {
 
     private fun enterPipIfVideo(): Boolean {
         if (customView == null || Build.VERSION.SDK_INT < 26) return false
-        return try { enterPictureInPictureMode(android.app.PictureInPictureParams.Builder().build()); true } catch (_: Throwable) { false }
+        return try { enterPictureInPictureMode(android.app.PictureInPictureParams.Builder().setAspectRatio(android.util.Rational(16, 9)).build()); true } catch (_: Throwable) { false }
     }
 
     private fun popOutVideo() {
@@ -3121,6 +3182,7 @@ class MainActivity : Activity() {
             fun add(v: View) = card.addView(v, LinearLayout.LayoutParams(MATCH, rowH))
             add(menuRow("plus", "علامة تبويب جديدة") { d.dismiss(); newTab(Pages.HOME_URL) })
             add(menuRow("incognito", "علامة تبويب خاصة جديدة") { d.dismiss(); newTab(Pages.HOME_URL, priv = true) })
+            add(menuRow("reload", "إعادة فتح آخر تبويب اتقفل") { d.dismiss(); reopenClosed() })
             add(menuRow("close", "إغلاق جميع علامات التبويب") { closeMany(tabs.filter { it.priv == priv && !it.pinned }) })
             add(menuRow("check", "اختيار علامات التبويب") { selecting = true; selected.clear(); renderAll() })
             add(menuRow("trash", "حذف بيانات التصفح") { d.dismiss(); confirmClear() })
@@ -3396,6 +3458,17 @@ class MainActivity : Activity() {
                     card.addView(pb, LinearLayout.LayoutParams(MATCH, dp(6)).apply { topMargin = dp(6); bottomMargin = dp(4) })
                 }
                 card.addView(TextView(this).apply { text = label; textSize = 11f; setTextColor(theme.sub) })
+                if (status == DownloadManager.STATUS_FAILED || status == DownloadManager.STATUS_PAUSED || status == -1) {
+                    card.addView(TextView(this).apply {
+                        text = "🔁 إعادة المحاولة"; textSize = 12f; setTextColor(theme.accent2); setPadding(0, dp(8), 0, dp(2))
+                        setOnClickListener {
+                            try { dm.remove(dl.dmId) } catch (_: Exception) {}
+                            io.execute { db.deleteDownload(dl.id) }
+                            startDownload(dl.url, null, null, dl.mime.ifBlank { null }, true, true)
+                            h.postDelayed({ render(d) }, 400)
+                        }
+                    })
+                }
                 card.layoutParams = LinearLayout.LayoutParams(MATCH, WRAP).apply { bottomMargin = dp(8) }
                 listBox.addView(card)
             }
@@ -3480,7 +3553,15 @@ class MainActivity : Activity() {
             val model = Cfg.str(Cfg.MODEL, "claude-sonnet-5-5")
             fun run(prompt: String) {
                 out.text = "⏳ ..."
-                io.execute { val a = AiClient.ask(key, model, prompt); h.post { out.text = a } }
+                io.execute {
+                    var first = true
+                    val sb = StringBuilder()
+                    AiClient.askStream(key, model, prompt) { piece ->
+                        sb.append(piece)
+                        val snap = sb.toString()
+                        h.post { if (first) first = false; out.text = snap }
+                    }
+                }
             }
             fun withText(js: String, build: (String) -> String) {
                 cur?.web?.evaluateJavascript(js) { r ->
@@ -3494,6 +3575,7 @@ class MainActivity : Activity() {
             box.addView(row); box.addView(ui.space(6))
             val row2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutDirection = View.LAYOUT_DIRECTION_RTL }
             row2.addView(ui.button("ترجم المحدد", false) { withText(Scripts.SELECTION) { "ترجم النص التالي إلى العربية (أو للإنجليزية لو كان عربيًا):\n\n$it" } }, LinearLayout.LayoutParams(0, WRAP, 1f).apply { marginEnd = dp(6) })
+            row2.addView(ui.button("ترجم الصفحة", false) { withText(Scripts.TEXT) { "ترجم نص الصفحة التالية إلى العربية بشكل واضح ومنظم (أو للإنجليزية لو كانت بالعربية):\n\n${it.take(12000)}" } }, LinearLayout.LayoutParams(0, WRAP, 1f).apply { marginEnd = dp(6) })
             row2.addView(ui.button("نسخ الرد", false) { copyText(out.text.toString()) }, LinearLayout.LayoutParams(0, WRAP, 1f))
             box.addView(row2); box.addView(ui.space(10))
             val q = ui.input("اسأل عن الصفحة أو أي سؤال...")
