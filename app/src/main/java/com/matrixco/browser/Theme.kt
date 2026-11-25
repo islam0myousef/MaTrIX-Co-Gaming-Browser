@@ -20,10 +20,14 @@ object Themes {
     private val midnight = MxTheme("midnight", "Midnight", c(31, 33, 40), c(43, 46, 55), c(54, 58, 68), c(96, 140, 240), c(160, 190, 250), Color.WHITE, c(168, 172, 184), false)
     private val light = MxTheme("classic", "Light", c(244, 245, 248), Color.WHITE, c(230, 232, 238), c(50, 100, 220), c(70, 110, 200), c(24, 26, 32), c(100, 106, 120), true)
 
+    private val opera = MxTheme("opera", "Opera", c(22, 22, 26), c(36, 36, 42), c(50, 50, 58), c(255, 27, 45), c(255, 98, 110), Color.WHITE, c(160, 160, 172), false)
+    private val operaLight = MxTheme("operalight", "Opera Light", c(243, 243, 246), Color.WHITE, c(229, 229, 234), c(240, 20, 40), c(210, 30, 50), c(22, 22, 26), c(100, 100, 112), true)
     private val gxClassic = MxTheme("gxclassic", "GX Classic", c(27, 24, 48), c(42, 39, 69), c(53, 49, 90), c(139, 124, 246), c(166, 139, 232), Color.WHITE, c(169, 164, 200), false)
     private val whiteWolf = MxTheme("whitewolf", "White Wolf", c(236, 238, 243), Color.WHITE, c(224, 227, 234), c(250, 30, 78), c(200, 40, 90), c(18, 18, 24), c(100, 104, 118), true)
 
     val all: List<MxTheme> = listOf(
+        opera,
+        operaLight,
         gxClassic,
         MxTheme("ultraviolet", "Ultra Violet", c(10, 6, 24), c(22, 14, 46), c(36, 24, 70), c(138, 60, 255), c(190, 140, 255), Color.WHITE, c(160, 150, 190), false),
         MxTheme("purplehaze", "Purple Haze", c(20, 6, 28), c(38, 12, 52), c(58, 20, 78), c(220, 60, 200), c(255, 140, 230), Color.WHITE, c(180, 150, 190), false),
@@ -41,19 +45,19 @@ object Themes {
     )
 
     /** Opera default theme: keeps the browser identity consistent across Android light/dark modes. */
-    val auto: MxTheme = gxClassic.copy(id = "auto", name = "GX Auto")
-    val picker: List<MxTheme> = listOf(auto) + all.filter { it.id != gxClassic.id }
+    val auto: MxTheme = opera.copy(id = "auto", name = "Opera Auto")
+    val picker: List<MxTheme> = listOf(auto) + all.filter { it.id != opera.id }
 
     fun resolve(ctx: Context, id: String?): MxTheme {
         // Opera identity is intentionally dark regardless of the Android system theme.
         // Users can still select the explicit Light theme from Appearance settings.
-        val base: MxTheme = if (id == null || id == "auto") gxClassic else all.firstOrNull { it.id == id } ?: gxClassic
+        val base: MxTheme = if (id == null || id == "auto") opera else all.firstOrNull { it.id == id } ?: opera
         val ov = Cfg.int(Cfg.ACCENT, 0)
         return if (ov != 0) base.copy(accent = ov, accent2 = Color.rgb(
             minOf(255, Color.red(ov) + 70), minOf(255, Color.green(ov) + 70), minOf(255, Color.blue(ov) + 70))) else base
     }
 
-    fun byId(id: String?): MxTheme = all.firstOrNull { it.id == id } ?: gxClassic
+    fun byId(id: String?): MxTheme = all.firstOrNull { it.id == id } ?: opera
 }
 
 fun Int.hex(): String = String.format("#%06X", 0xFFFFFF and this)
@@ -177,5 +181,8 @@ object Cfg {
     const val GX_PROFILE = "gx_profile"
     const val GX_MOTION = "gx_motion"
     const val CLOCK_FONT = "clock_font"
+    const val NIGHT = "night_overlay"
+    const val NIGHT_LVL = "night_level"
+    const val SWIPE_BAR = "swipe_bar"
 }
 

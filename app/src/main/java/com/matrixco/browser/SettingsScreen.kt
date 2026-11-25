@@ -139,6 +139,24 @@ class SettingsScreen(
     // ───────── الصفحات ─────────
 
     private fun main(col: LinearLayout) {
+        // ترتيب Opera: المفاتيح السريعة فوق، وبعدها الأقسام
+        card(col, listOf(
+            nav("globe", "VPN", "Tor وبروكسي وDNS مشفّر") { push("network") },
+            toggle("bolt", "موفر البيانات", "تقليل استهلاك البيانات (إيقاف الصور)", Cfg.DATASAVER, false) { a.applyDataSaver(it) },
+            toggle("shield", "حجب الإعلانات", "صفحات أسرع وأنظف", Cfg.SHIELD, true) { a.reloadCurrent() },
+            toggle("spy", "حظر برامج التتبع", "منع متتبعات الإعلانات والتحليلات", Cfg.TRK, true) { a.reloadCurrent() },
+            toggle("moon", "الوضع الليلي", "طبقة دافئة لراحة العين", Cfg.NIGHT, false) { a.applyNight() }
+        ))
+        section(col, "")
+        card(col, listOf(
+            nav("globe", "التصفح", "HTTPS، الإيماءات، الصوت") { push("browsing") },
+            nav("palette", "المظهر", "الثيم والألوان والخلفيات") { push("appearance") },
+            nav("book", "بدء الصفحة", "الطلبات السريعة، الخلفية، المحتوى") { push("gxmods") },
+            nav("shield_check", "الخصوصية والأمان", "إعلانات، متتبعات، أمان") { push("privacy") },
+            nav("search", "بحث", a.engineLabel()) { push("search") },
+            nav("storage", "تخزين الملف", "الكاش والصفحات المحفوظة") { push("storage") },
+            action("download", "التنزيلات") { close(); a.openDownloadsManager() }
+        ))
         section(col, "GX")
         card(col, listOf(
             nav("palette", "GX Mods", "خلفيات متحركة، ألوان تمييز، أصوات") { push("gxmods") },

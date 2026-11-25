@@ -154,6 +154,7 @@ class MainActivity : Activity() {
     private lateinit var hud: TextView
     private lateinit var fab: ImageView
     private val slotViews = ArrayList<View>()
+    private var nightView: View? = null
     private var tabsIcon: IconDrawable? = null
     private var menuPopup: PopupWindow? = null
     private var shieldPopup: PopupWindow? = null
@@ -507,8 +508,8 @@ class MainActivity : Activity() {
         val pill = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = Ui.round(theme.surface, dp(18).toFloat(), theme.accent.withAlpha(55), dp(1))
-            setPadding(dp(4), 0, dp(2), 0)
+            background = Ui.round(theme.surface, dp(22).toFloat())
+            setPadding(dp(6), 0, dp(6), 0)
         }
         shieldBadge = TextView(this).apply {
             text = "0"; textSize = 11f; setTextColor(theme.sub); gravity = Gravity.CENTER_VERTICAL
@@ -549,13 +550,20 @@ class MainActivity : Activity() {
             })
         }
         pill.addView(addressBar, LinearLayout.LayoutParams(0, dp(44), 1f))
+        pill.addView(ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER; setImageDrawable(IconDrawable("sparkle", theme.accent2, dp(20)))
+            setOnClickListener { showAi() }
+        }, LinearLayout.LayoutParams(dp(38), dp(44)))
+        pill.addView(ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER; setImageDrawable(IconDrawable("mic", theme.sub, dp(20)))
+            setOnClickListener { startVoice() }
+        }, LinearLayout.LayoutParams(dp(38), dp(44)))
         starBtn = TextView(this)
         reloadBtn = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER
             setOnClickListener { cur?.let { if (it.progress in 1..99) it.web.stopLoading() else it.web.reload() } }
         }
         setReloadState(false)
-        pill.addView(reloadBtn, LinearLayout.LayoutParams(dp(42), dp(44)))
         topBar.addView(pill, LinearLayout.LayoutParams(0, dp(44), 1f))
         vidBadge = TextView(this).apply {
             textSize = 11f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; visibility = View.GONE
@@ -625,36 +633,31 @@ class MainActivity : Activity() {
         spyBar.addView(spyText, LinearLayout.LayoutParams(0, WRAP, 1f))
         column.addView(spyBar, LinearLayout.LayoutParams(MATCH, WRAP))
 
-        // ── الشريط السفلي (أسلوب GX: رجوع، تقدّم، زر GX المركزي، التبويبات، القائمة)
-        bottomBar = LinearLayout(this).apply {
+        // ── الشريط السفلي (ترتيب Opera: القايمة، التبويبات، البحث، إعادة التحميل، تقدّم)
+        bottomBar = SwipeBar(this) { dir -> onBarSwipe(dir) }.apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER
-            background = Ui.round(theme.surface, dp(18).toFloat(), theme.accent.withAlpha(38), dp(1))
-            elevation = dp(5).toFloat()
+            setBackgroundColor(theme.bg)
+            elevation = dp(2).toFloat()
         }
-        val defs = listOf("back", "forward", "bolt", "tabs", "dots")
+        val defs = listOf("user", "tabs", "search", "reload", "forward")
         for (i in 0 until 5) {
-            val iv = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER }
-            if (i == 2) {
-                iv.setImageDrawable(IconDrawable("bolt", Color.WHITE, dp(24)))
-                iv.background = Ui.grad(theme.accent, theme.accent2, dp(18).toFloat(), theme.accent2.withAlpha(180), dp(1), false)
-                iv.elevation = dp(6).toFloat()
-                val wrap = FrameLayout(this)
-                wrap.addView(iv, FrameLayout.LayoutParams(dp(46), dp(46), Gravity.CENTER))
-                slotViews.add(wrap); bottomBar.addView(wrap, LinearLayout.LayoutParams(0, dp(58), 1f))
-            } else {
-                iv.setImageDrawable(IconDrawable(defs[i], theme.text, dp(26)).also { if (i == 3) tabsIcon = it })
-                slotViews.add(iv); bottomBar.addView(iv, LinearLayout.LayoutParams(0, dp(58), 1f))
-            }
+            val iv: ImageView = if (i == 3) reloadBtn else ImageView(this)
+            iv.scaleType = ImageView.ScaleType.CENTER
+            if (i != 3) iv.setImageDrawable(IconDrawable(defs[i], theme.text, dp(24)).also { if (i == 1) tabsIcon = it })
+            slotViews.add(iv); bottomBar.addView(iv, LinearLayout.LayoutParams(0, dp(54), 1f))
         }
-        slotViews[0].setOnClickListener { Fx.tap(it); cur?.let { t -> if (t.web.canGoBack()) t.web.goBack() } }
-        slotViews[1].setOnClickListener { Fx.tap(it); cur?.let { t -> if (t.web.canGoForward()) t.web.goForward() } }
-        slotViews[2].setOnClickListener { Fx.tap(it, "open"); showGxControl() }
-        slotViews[2].setOnLongClickListener {
+        setReloadState(false)
+        slotViews[0].setOnClickListener { Fx.tap(it, "open"); showMenu() }
+        slotViews[0].setOnLongClickListener { Fx.tap(it); showGxControl(); true }
+        slotViews[1].setOnClickListener { Fx.tap(it); showTabs() }
+        slotViews[1].setOnLongClickListener { Fx.tap(it); newTab(Pages.HOME_URL); true }
+        slotViews[2].setOnClickListener {
             Fx.tap(it); addressBar.requestFocus()
-            (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(addressBar, 0); true
+            (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(addressBar, 0)
         }
-        slotViews[3].setOnClickListener { Fx.tap(it); showTabs() }
-        slotViews[4].setOnClickListener { Fx.tap(it, "open"); showMenu() }
+        slotViews[2].setOnLongClickListener { Fx.tap(it); showAi(); true }
+        slotViews[3].setOnClickListener { Fx.tap(it); cur?.let { t -> if (t.progress in 1..99) t.web.stopLoading() else t.web.reload() } }
+        slotViews[4].setOnClickListener { Fx.tap(it); cur?.let { t -> if (t.web.canGoForward()) t.web.goForward() } }
         column.addView(bottomBar, LinearLayout.LayoutParams(MATCH, WRAP))
 
         // HUD للعبة (Ping/FPS)
@@ -667,7 +670,28 @@ class MainActivity : Activity() {
 
         setContentView(root)
         buildFab()
+        nightView = View(this).apply { visibility = View.GONE; isClickable = false; isFocusable = false }
+        root.addView(nightView, FrameLayout.LayoutParams(MATCH, MATCH))
+        applyNight()
         updateBottomBar()
+    }
+
+    /** وضع ليلي بأسلوب Opera: طبقة دافئة وتعتيم خفيف فوق الشاشة (مستوى 1-3) */
+    internal fun applyNight() {
+        val v = nightView ?: return
+        val on = Cfg.bool(Cfg.NIGHT, false)
+        val a = intArrayOf(0, 38, 70, 105)[Cfg.int(Cfg.NIGHT_LVL, 2).coerceIn(1, 3)]
+        v.setBackgroundColor(Color.argb(a, 255, 120, 20))
+        v.visibility = if (on) View.VISIBLE else View.GONE
+    }
+
+    /** إيماءات الشريط السفلي (زي Opera): سحب لفوق = القايمة، يمين/شمال = تبديل التبويب */
+    private fun onBarSwipe(dir: Int) {
+        if (!Cfg.bool(Cfg.SWIPE_BAR, true)) return
+        if (dir == 0) { showMenu(); return }
+        if (tabs.size < 2) return
+        val i = tabs.indexOf(cur).let { if (it < 0) 0 else it }
+        selectTab(tabs[(i + dir + tabs.size) % tabs.size])
     }
 
     private fun glowBtn(label: String, size: Float, onClick: () -> Unit) = TextView(this).apply {
@@ -682,7 +706,7 @@ class MainActivity : Activity() {
         val logo = ImageView(this)
         try { logo.setImageBitmap(BitmapFactory.decodeStream(assets.open("logo.png"))) } catch (_: Exception) {}
         col.addView(logo, LinearLayout.LayoutParams(dp(84), dp(84)))
-        col.addView(TextView(this).apply { text = "MaTrIX GX"; textSize = 19f; setTextColor(theme.text); gravity = Gravity.CENTER; setPadding(0, dp(12), 0, 0) })
+        col.addView(TextView(this).apply { text = "MaTrIX"; textSize = 19f; setTextColor(theme.text); gravity = Gravity.CENTER; setPadding(0, dp(12), 0, 0) })
         sp.addView(col, FrameLayout.LayoutParams(MATCH, MATCH))
         root.addView(sp, FrameLayout.LayoutParams(MATCH, MATCH))
         h.postDelayed({ sp.animate().alpha(0f).setDuration(250).withEndAction { root.removeView(sp) }.start() }, 600)
@@ -719,9 +743,8 @@ class MainActivity : Activity() {
         tabsIcon?.let { it.label = tabs.size.toString(); it.invalidateSelf() }
         if (slotViews.size >= 5) {
             val t = cur
-            slotViews[0].alpha = if (t != null && t.web.canGoBack()) 1f else 0.35f
-            slotViews[1].alpha = if (t != null && t.web.canGoForward()) 1f else 0.35f
-            slotViews[3].invalidate()
+            slotViews[4].alpha = if (t != null && t.web.canGoForward()) 1f else 0.35f
+            slotViews[1].invalidate()
         }
     }
 
@@ -739,7 +762,7 @@ class MainActivity : Activity() {
     }
 
     private fun setReloadState(loading: Boolean) {
-        reloadBtn.setImageDrawable(IconDrawable(if (loading) "close" else "reload", theme.sub, dp(20)))
+        reloadBtn.setImageDrawable(IconDrawable(if (loading) "close" else "reload", theme.text, dp(22)))
     }
 
     private fun refreshChrome() {
@@ -2070,8 +2093,8 @@ class MainActivity : Activity() {
         dismissMenu(); dismissShield()
         val d = Dialog(this)
         d.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
-        val bg = Color.rgb(27, 24, 48); val card = Color.rgb(42, 39, 69); val card2 = Color.rgb(53, 49, 90)
-        val txt = Color.WHITE; val sub = Color.rgb(169, 164, 200); val teal = theme.accent
+        val bg = theme.bg; val card = theme.surface; val card2 = theme.surface2
+        val txt = theme.text; val sub = theme.sub; val teal = theme.accent
         val sheet = Ui.topRound(bg, dp(26).toFloat())
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_RTL; setPadding(dp(14), dp(14), dp(14), dp(18)) }
         val sv = ScrollView(this).apply { isVerticalScrollBarEnabled = false; background = sheet; addView(col, ViewGroup.LayoutParams(MATCH, WRAP)) }
@@ -2106,7 +2129,7 @@ class MainActivity : Activity() {
         fun qBtn(icon: String, label: String, state: String, on: Boolean, click: () -> Unit) {
             val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; setOnClickListener { click() } }
             val circle = FrameLayout(this).apply { background = Ui.round(if (on) teal else card2, dp(20).toFloat()) }
-            circle.addView(ic(icon, if (on) Color.rgb(27, 24, 48) else txt, 24), FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
+            circle.addView(ic(icon, if (on) Color.WHITE else txt, 24), FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
             c.addView(circle, LinearLayout.LayoutParams(dp(60), dp(56)))
             c.addView(TextView(this).apply { text = label; textSize = 11f; setTextColor(txt); gravity = Gravity.CENTER; setPadding(0, dp(6), 0, 0) })
             c.addView(TextView(this).apply { text = state; textSize = 10f; setTextColor(sub); gravity = Gravity.CENTER })
@@ -2121,7 +2144,9 @@ class MainActivity : Activity() {
             val sh = Cfg.bool(Cfg.SHIELD, true)
             qBtn("shield", "حاجب الإعلانات", if (sh) "شغّال" else "إيقاف", sh) { gate { Cfg.setBool(Cfg.SHIELD, !sh); cur?.web?.reload(); refreshQuick() } }
             val dk = Cfg.bool(Cfg.DARK, false)
-            qBtn("moon", "الوضع الليلي", if (dk) "شغّال" else "إيقاف", dk) { toggleDark(); refreshQuick() }
+            val nt = Cfg.bool(Cfg.NIGHT, false)
+            qBtn("moon", "الوضع الليلي", if (nt) "شغّال" else "إيقاف", nt) { Cfg.setBool(Cfg.NIGHT, !nt); applyNight(); refreshQuick() }
+            qBtn("eye", "تعتيم المواقع", if (dk) "شغّال" else "إيقاف", dk) { toggleDark(); refreshQuick() }
         }
         refreshQuick()
 
@@ -2139,16 +2164,18 @@ class MainActivity : Activity() {
             r.addView(b ?: View(this), LinearLayout.LayoutParams(0, dp(54), 1f).apply { marginStart = dp(5) })
             col.addView(r, lp(MATCH, WRAP, dp(10)))
         }
+        tileRow(tile("plus", "تبويب جديد") { newTab(Pages.HOME_URL) }, tile("sparkle", "Aria · المساعد الذكي") { showAi() })
         tileRow(tile("bookmark", "المفضلات") { openInternal("/bookmarks") }, tile("download", "التنزيلات") { openDownloadsManager() })
         tileRow(tile("history", "المحفوظات") { openInternal("/history") }, tile("book", "صفحات غير متصلة") { openInternal("/offline") })
         tileRow(tile("game", "وضع الألعاب") { setGameMode(!gameMode, false) }, tile("incognito", "تبويب خاص") { newTab(Pages.HOME_URL, priv = true) })
+        tileRow(tile("bolt", "GX Control") { showGxControl() }, tile("desktop", if (cur?.desktop == true) "نسخة الموبايل" else "نسخة الكمبيوتر") { setDesktop(cur?.desktop != true) })
         tileRow(tile("bolt", "Performance Lab") { showPerformanceLab() }, tile("shield_check", "Security Center") { openInternal("/shield") })
 
         // بانر الشبكة والـ VPN
         val banner = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(18), 0, dp(18), 0)
             background = android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.RIGHT_LEFT,
-                intArrayOf(Color.rgb(74, 108, 247), Color.rgb(138, 92, 240), Color.rgb(224, 92, 200))).apply { cornerRadius = dp(22).toFloat() }
+                intArrayOf(theme.accent.darker(0.75f), theme.accent, theme.accent2)).apply { cornerRadius = dp(22).toFloat() }
             setOnClickListener { d.dismiss(); openSettings("network") }
         }
         val bt = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -2173,6 +2200,13 @@ class MainActivity : Activity() {
         }
         col.addView(View(this).apply { setBackgroundColor(card) }, lp(MATCH, dp(1), dp(14)))
         row("palette", "المظهر", "الثيمات والخلفيات والألوان") { openSettings("appearance") }
+        row("moon", "قوة الوضع الليلي", "المستوى الحالي: " + Cfg.int(Cfg.NIGHT_LVL, 2) + " من 3 (اضغط للتغيير)") {
+            Cfg.setInt(Cfg.NIGHT_LVL, Cfg.int(Cfg.NIGHT_LVL, 2) % 3 + 1); Cfg.setBool(Cfg.NIGHT, true); applyNight()
+            toast("الوضع الليلي: مستوى " + Cfg.int(Cfg.NIGHT_LVL, 2))
+        }
+        row("tabs", "إيماءات الشريط السفلي", if (Cfg.bool(Cfg.SWIPE_BAR, true)) "شغّالة: اسحب لفوق للقايمة، يمين/شمال للتبويبات" else "مقفولة (اضغط للتشغيل)") {
+            Cfg.setBool(Cfg.SWIPE_BAR, !Cfg.bool(Cfg.SWIPE_BAR, true)); toast(if (Cfg.bool(Cfg.SWIPE_BAR, true)) "الإيماءات شغّالة" else "الإيماءات مقفولة")
+        }
         row("shield_check", "الجدار الحديدي", "مستوى الحساسية وسجل المنع والقائمة البيضاء") { openSettings("iron") }
         row("storage", "نسخ احتياطي واستعادة", "ملف فيه إعداداتك ومفضلتك وفلاترك") { exportBackup() }
         row("code", "أدوات الصفحة", "نسخة الكمبيوتر، البحث، القراءة، الترجمة، اللقطات...") { showMenuLegacy() }
@@ -2470,9 +2504,9 @@ class MainActivity : Activity() {
         dismissMenu(); dismissShield()
         val dialog = Dialog(this)
         dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
-        val bg = Color.rgb(27, 24, 48)
-        val card = Color.rgb(42, 39, 69)
-        val sub = Color.rgb(169, 164, 200)
+        val bg = theme.bg
+        val card = theme.surface
+        val sub = theme.sub
         val col = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL

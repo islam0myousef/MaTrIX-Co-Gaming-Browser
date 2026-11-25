@@ -67,6 +67,8 @@ class IconDrawable(private val type: String, var color: Int, private val sizePx:
             }
             "bookmark" -> poly(c, true, 7f, 4f, 17f, 4f, 17f, 20f, 12f, 16f, 7f, 20f)
             "bookmark_fill" -> { f.style = Paint.Style.FILL; path.reset(); path.moveTo(7f, 4f); path.lineTo(17f, 4f); path.lineTo(17f, 20f); path.lineTo(12f, 16f); path.lineTo(7f, 20f); path.close(); c.drawPath(path, f) }
+            "user" -> { c.drawCircle(12f, 8.5f, 3.8f, p); poly(c, false, 4.5f, 20f, 5.5f, 16f, 9f, 13.8f, 15f, 13.8f, 18.5f, 16f, 19.5f, 20f) }
+            "mic" -> { r.set(9f, 3f, 15f, 13f); c.drawRoundRect(r, 3f, 3f, p); poly(c, false, 6f, 11f, 6.5f, 14.5f, 9.5f, 17f, 14.5f, 17f, 17.5f, 14.5f, 18f, 11f); line(12f, 17f, 12f, 21f, c); line(9f, 21f, 15f, 21f, c) }
             "home" -> { poly(c, false, 4f, 11f, 12f, 4f, 20f, 11f); poly(c, false, 6.5f, 9.5f, 6.5f, 20f, 10.5f, 20f, 10.5f, 14f, 13.5f, 14f, 13.5f, 20f, 17.5f, 20f, 17.5f, 9.5f) }
             "search" -> { c.drawCircle(11f, 11f, 6f, p); line(15.5f, 15.5f, 20f, 20f, c) }
             "star" -> {
