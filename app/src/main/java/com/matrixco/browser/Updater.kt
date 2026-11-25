@@ -251,16 +251,15 @@ class UpdateUi(private val a: MainActivity, private val ui: UiKit) {
         fun rounded(color: Int, stroke: Int = Color.TRANSPARENT, radius: Int = 20): android.graphics.drawable.Drawable =
             Ui.round(color, dp(radius).toFloat(), if (stroke != Color.TRANSPARENT) stroke else 0, if (stroke != Color.TRANSPARENT) dp(1) else 0)
 
-        // Real colors sampled from reference art: deep navy-violet card (neon "Version Update" dialog),
-        // violet→magenta glow accent (same dialog's glowing geometric number), and the Earth2 teal
-        // progress/brand accent (bright fill on a dark teal track).
-        val navyTop = 0xFF1A0E26.toInt()
-        val navyBottom = 0xFF08050C.toInt()
-        val violet = 0xFFFF1B4D.toInt()
-        val magenta = 0xFF8A2BFF.toInt()
-        val teal = 0xFF00E5FF.toInt()
-        val tealDark = 0xFF00323B.toInt()
-        val cyan = 0xFF00E5FF.toInt()
+        // لوحة ألوان Opera الداكنة: كارت بنفسجي غامق هادي، لون أساسي بنفسجي لافندر ناعم،
+        // وشريط تقدم لافندر فاتح على مسار بنفسجي أغمق.
+        val navyTop = 0xFF262244.toInt()
+        val navyBottom = 0xFF181530.toInt()
+        val violet = 0xFF8B7CF6.toInt()
+        val magenta = 0xFFA68BE8.toInt()
+        val teal = 0xFFB7A9FF.toInt()
+        val tealDark = 0xFF3A355E.toInt()
+        val cyan = 0xFFB7A9FF.toInt()
 
         val card = FrameLayout(a).apply {
             background = rounded(navyTop, (0x4A000000.toInt() or (cyan and 0x00FFFFFF)), 28)

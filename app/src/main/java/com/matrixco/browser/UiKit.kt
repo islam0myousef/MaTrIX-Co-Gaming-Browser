@@ -39,7 +39,7 @@ class UiKit(private val act: Activity) {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
             setPadding(dp(14), dp(12), dp(14), dp(16))
-            background = Ui.topRound(theme.surface, dp(22).toFloat(), theme.accent)
+            background = Ui.topRound(theme.surface, dp(22).toFloat())
         }
         sv.addView(box, ViewGroup.LayoutParams(MATCH, WRAP))
         build(box, d)
@@ -59,7 +59,6 @@ class UiKit(private val act: Activity) {
 
     fun titleView(text: String) = TextView(act).apply {
         this.text = text; textSize = 16f; setTextColor(theme.text); typeface = Typeface.DEFAULT_BOLD; letterSpacing = 0.03f
-        setShadowLayer(12f, 0f, 0f, theme.accent.withAlpha(170))
         setPadding(dp(4), dp(2), dp(4), dp(10))
     }
 
@@ -73,11 +72,11 @@ class UiKit(private val act: Activity) {
         setPadding(dp(6), dp(12), dp(6), dp(6))
     }
 
-    /** أيقونة دائرية مسطّحة */
+    /** أيقونة مربعة مدوّرة ناعمة (ستايل Opera) */
     fun iconTile(emoji: String, color: Int, size: Int = 40): TextView = TextView(act).apply {
         text = emoji; textSize = size * 0.42f; gravity = Gravity.CENTER
-        setTextColor(theme.text)
-        background = Ui.hex(theme.surface2, color.withAlpha(150), dp(1))
+        setTextColor(color)
+        background = Ui.round(theme.surface2, dp(12).toFloat(), color.withAlpha(46), dp(1))
         minimumWidth = dp(size); minimumHeight = dp(size)
     }
 
@@ -108,13 +107,13 @@ class UiKit(private val act: Activity) {
     fun applySwitch(sw: Switch, on: Boolean) {
         sw.isChecked = on
         val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
-        sw.thumbTintList = ColorStateList(states, intArrayOf(theme.accent, theme.sub))
-        sw.trackTintList = ColorStateList(states, intArrayOf(theme.accent.withAlpha(110), theme.sub.withAlpha(70)))
+        sw.thumbTintList = ColorStateList(states, intArrayOf(Color.WHITE, theme.sub))
+        sw.trackTintList = ColorStateList(states, intArrayOf(theme.accent.withAlpha(180), theme.sub.withAlpha(70)))
     }
 
-    /** خلفية الصف: لو شغّال تاخد إطار نيون بلون الثيم (Glow) */
-    fun rowBg(on: Boolean) = if (on) Ui.round(theme.surface2, dp(12).toFloat(), theme.accent.withAlpha(190), dp(1))
-        else Ui.round(theme.surface2, dp(12).toFloat(), theme.accent.withAlpha(28), dp(1))
+    /** خلفية الصف: لو شغّال تاخد إطار ناعم بلون الثيم */
+    fun rowBg(on: Boolean) = if (on) Ui.round(theme.surface2, dp(14).toFloat(), theme.accent.withAlpha(130), dp(1))
+        else Ui.round(theme.surface2, dp(14).toFloat(), 0, 0)
 
     fun toggleRow(icon: String, title: String, sub: String?, initial: Boolean, color: Int = theme.accent, onChange: (Boolean) -> Unit): View {
         var state = initial
@@ -128,8 +127,8 @@ class UiKit(private val act: Activity) {
         this.text = text; textSize = 13f; gravity = Gravity.CENTER
         setTextColor(if (primary) Color.WHITE else theme.text)
         setPadding(dp(16), dp(10), dp(16), dp(10))
-        background = if (primary) Ui.grad(theme.accent, theme.accent.darker(0.72f), dp(12).toFloat(), theme.accent.withAlpha(120), dp(1), false) else Ui.round(theme.surface2, dp(12).toFloat(), theme.accent.withAlpha(90), dp(1))
-        typeface = Typeface.DEFAULT_BOLD; if (primary) setShadowLayer(8f, 0f, 0f, theme.accent.withAlpha(200))
+        background = if (primary) Ui.grad(theme.accent, theme.accent.darker(0.78f), dp(14).toFloat(), 0, 0, false) else Ui.round(theme.surface2, dp(14).toFloat(), theme.accent.withAlpha(60), dp(1))
+        typeface = Typeface.DEFAULT_BOLD
         setOnClickListener { onClick() }
     }
 

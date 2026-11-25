@@ -2070,9 +2070,9 @@ class MainActivity : Activity() {
         dismissMenu(); dismissShield()
         val d = Dialog(this)
         d.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
-        val bg = Color.rgb(9, 10, 16); val card = Color.rgb(20, 23, 35); val card2 = Color.rgb(29, 34, 49)
-        val txt = Color.WHITE; val sub = Color.rgb(157, 166, 190); val teal = theme.accent2
-        val sheet = Ui.topRound(bg, dp(26).toFloat(), theme.accent)
+        val bg = Color.rgb(27, 24, 48); val card = Color.rgb(42, 39, 69); val card2 = Color.rgb(53, 49, 90)
+        val txt = Color.WHITE; val sub = Color.rgb(169, 164, 200); val teal = theme.accent
+        val sheet = Ui.topRound(bg, dp(26).toFloat())
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_RTL; setPadding(dp(14), dp(14), dp(14), dp(18)) }
         val sv = ScrollView(this).apply { isVerticalScrollBarEnabled = false; background = sheet; addView(col, ViewGroup.LayoutParams(MATCH, WRAP)) }
 
@@ -2082,7 +2082,7 @@ class MainActivity : Activity() {
         // بطاقة الحالة
         val head = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(14), dp(12), dp(14), dp(12))
-            background = Ui.round(card, dp(22).toFloat(), theme.accent.withAlpha(55), dp(1))
+            background = Ui.round(card, dp(22).toFloat(), Color.argb(26, 255, 255, 255), dp(1))
         }
         val av = FrameLayout(this).apply {
             background = android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TL_BR, intArrayOf(theme.accent, theme.accent2)).apply { shape = android.graphics.drawable.GradientDrawable.OVAL }
@@ -2105,8 +2105,8 @@ class MainActivity : Activity() {
         lateinit var refreshQuick: () -> Unit
         fun qBtn(icon: String, label: String, state: String, on: Boolean, click: () -> Unit) {
             val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; setOnClickListener { click() } }
-            val circle = FrameLayout(this).apply { background = Ui.round(if (on) teal else card2, dp(28).toFloat()) }
-            circle.addView(ic(icon, if (on) Color.rgb(18, 20, 25) else txt, 24), FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
+            val circle = FrameLayout(this).apply { background = Ui.round(if (on) teal else card2, dp(20).toFloat()) }
+            circle.addView(ic(icon, if (on) Color.rgb(27, 24, 48) else txt, 24), FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
             c.addView(circle, LinearLayout.LayoutParams(dp(60), dp(56)))
             c.addView(TextView(this).apply { text = label; textSize = 11f; setTextColor(txt); gravity = Gravity.CENTER; setPadding(0, dp(6), 0, 0) })
             c.addView(TextView(this).apply { text = state; textSize = 10f; setTextColor(sub); gravity = Gravity.CENTER })
@@ -2128,7 +2128,7 @@ class MainActivity : Activity() {
         // اختصارات
         fun tile(icon: String, label: String, click: () -> Unit): View = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(14), 0, dp(14), 0)
-            background = Ui.round(card, dp(16).toFloat(), theme.accent.withAlpha(40), dp(1))
+            background = Ui.round(card, dp(16).toFloat(), Color.argb(20, 255, 255, 255), dp(1))
             addView(TextView(this@MainActivity).apply { text = label; textSize = 13f; setTextColor(txt) }, LinearLayout.LayoutParams(0, WRAP, 1f))
             addView(ic(icon, sub, 22), LinearLayout.LayoutParams(dp(22), dp(22)))
             setOnClickListener { d.dismiss(); click() }
@@ -2470,9 +2470,9 @@ class MainActivity : Activity() {
         dismissMenu(); dismissShield()
         val dialog = Dialog(this)
         dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
-        val bg = Color.rgb(10, 12, 19)
-        val card = Color.rgb(22, 26, 39)
-        val sub = Color.rgb(153, 163, 185)
+        val bg = Color.rgb(27, 24, 48)
+        val card = Color.rgb(42, 39, 69)
+        val sub = Color.rgb(169, 164, 200)
         val col = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL

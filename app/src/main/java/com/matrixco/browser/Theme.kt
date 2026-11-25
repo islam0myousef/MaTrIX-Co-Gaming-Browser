@@ -20,7 +20,7 @@ object Themes {
     private val midnight = MxTheme("midnight", "Midnight", c(31, 33, 40), c(43, 46, 55), c(54, 58, 68), c(96, 140, 240), c(160, 190, 250), Color.WHITE, c(168, 172, 184), false)
     private val light = MxTheme("classic", "Light", c(244, 245, 248), Color.WHITE, c(230, 232, 238), c(50, 100, 220), c(70, 110, 200), c(24, 26, 32), c(100, 106, 120), true)
 
-    private val gxClassic = MxTheme("gxclassic", "MaTrIX GX Red", c(8, 7, 13), c(19, 16, 28), c(31, 26, 46), c(255, 27, 77), c(0, 229, 255), Color.WHITE, c(160, 154, 184), false)
+    private val gxClassic = MxTheme("gxclassic", "GX Classic", c(27, 24, 48), c(42, 39, 69), c(53, 49, 90), c(139, 124, 246), c(166, 139, 232), Color.WHITE, c(169, 164, 200), false)
     private val whiteWolf = MxTheme("whitewolf", "White Wolf", c(236, 238, 243), Color.WHITE, c(224, 227, 234), c(250, 30, 78), c(200, 40, 90), c(18, 18, 24), c(100, 104, 118), true)
 
     val all: List<MxTheme> = listOf(
@@ -40,12 +40,12 @@ object Themes {
         light
     )
 
-    /** GX default theme: keeps the browser identity consistent across Android light/dark modes. */
+    /** Opera default theme: keeps the browser identity consistent across Android light/dark modes. */
     val auto: MxTheme = gxClassic.copy(id = "auto", name = "GX Auto")
     val picker: List<MxTheme> = listOf(auto) + all.filter { it.id != gxClassic.id }
 
     fun resolve(ctx: Context, id: String?): MxTheme {
-        // GX identity is intentionally dark regardless of the Android system theme.
+        // Opera identity is intentionally dark regardless of the Android system theme.
         // Users can still select the explicit Light theme from Appearance settings.
         val base: MxTheme = if (id == null || id == "auto") gxClassic else all.firstOrNull { it.id == id } ?: gxClassic
         val ov = Cfg.int(Cfg.ACCENT, 0)
@@ -67,18 +67,23 @@ object Ui {
     fun dp(ctx: Context, v: Int): Int = (v * ctx.resources.displayMetrics.density + 0.5f).toInt()
 
     fun round(color: Int, radiusPx: Float, strokeColor: Int = 0, strokePx: Int = 0): Drawable =
-        ChamferDrawable(color, 0, false, radiusPx, strokeColor, strokePx, 0, 0)
+        GradientDrawable().apply {
+            setColor(color); cornerRadius = radiusPx
+            if (strokePx > 0 && strokeColor != 0) setStroke(strokePx, strokeColor)
+        }
 
     fun grad(c1: Int, c2: Int, radiusPx: Float, strokeColor: Int = 0, strokePx: Int = 0, vertical: Boolean = true): Drawable =
-        ChamferDrawable(c1, c2, !vertical, radiusPx, strokeColor, strokePx, 0, 0)
+        GradientDrawable(if (vertical) GradientDrawable.Orientation.TOP_BOTTOM else GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(c1, c2)).apply {
+            cornerRadius = radiusPx
+            if (strokePx > 0 && strokeColor != 0) setStroke(strokePx, strokeColor)
+        }
 
-    /** شيت من تحت بحواف علوية مقطوعة وخط نيون رفيع فوق */
-    fun topRound(color: Int, radiusPx: Float, edge: Int = 0): Drawable =
-        ChamferDrawable(color, 0, false, radiusPx, 0, 0, 1, edge)
-
-    /** شكل سداسي مفلطح لشرائح الأيقونات */
-    fun hex(color: Int, strokeColor: Int = 0, strokePx: Int = 0): Drawable =
-        ChamferDrawable(color, 0, false, 0f, strokeColor, strokePx, 2, 0)
+    /** شيت من تحت بحواف علوية مدوّرة ناعمة */
+    fun topRound(color: Int, radiusPx: Float): Drawable =
+        GradientDrawable().apply {
+            setColor(color)
+            cornerRadii = floatArrayOf(radiusPx, radiusPx, radiusPx, radiusPx, 0f, 0f, 0f, 0f)
+        }
 
     fun oval(color: Int): GradientDrawable = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(color) }
 }
@@ -174,57 +179,3 @@ object Cfg {
     const val CLOCK_FONT = "clock_font"
 }
 
-
-/**
- * رسمة بحواف مقطوعة (Chamfer) على طريقة GX: القطع في الركنين المتقابلين (أعلى-يسار وأسفل-يمين) والباقي قطع أصغر.
- * mode 0: مستطيل بحواف مقطوعة. mode 1: شيت سفلي (الحواف العلوية فقط) + خط علوي بلون edge. mode 2: سداسي.
- */
-class ChamferDrawable(
-    private val fill: Int, private val fill2: Int, private val horizontal: Boolean,
-    private val radius: Float, private val strokeColor: Int, private val strokePx: Int,
-    private val mode: Int, private val edge: Int
-) : Drawable() {
-    private val path = android.graphics.Path()
-    private val fp = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-    private val sp = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { style = android.graphics.Paint.Style.STROKE }
-
-    override fun onBoundsChange(b: android.graphics.Rect) {
-        val l = b.left.toFloat(); val t = b.top.toFloat(); val r = b.right.toFloat(); val bt = b.bottom.toFloat()
-        val w = r - l; val h = bt - t
-        path.reset()
-        if (w <= 0f || h <= 0f) return
-        if (mode == 2) {
-            val k = minOf(w, h) * 0.28f
-            path.moveTo(l + k, t); path.lineTo(r - k, t); path.lineTo(r, t + h / 2); path.lineTo(r - k, bt); path.lineTo(l + k, bt); path.lineTo(l, t + h / 2)
-            path.close()
-        } else {
-            val big = minOf(radius * 0.6f, minOf(w, h) * 0.3f)
-            val small = big * 0.35f
-            if (mode == 1) {
-                path.moveTo(l + big, t); path.lineTo(r - small, t); path.lineTo(r, t + small); path.lineTo(r, bt); path.lineTo(l, bt); path.lineTo(l, t + big)
-            } else {
-                path.moveTo(l + big, t); path.lineTo(r - small, t); path.lineTo(r, t + small)
-                path.lineTo(r, bt - big); path.lineTo(r - big, bt); path.lineTo(l + small, bt)
-                path.lineTo(l, bt - small); path.lineTo(l, t + big)
-            }
-            path.close()
-        }
-        fp.shader = if (fill2 != 0) (if (horizontal) android.graphics.LinearGradient(l, 0f, r, 0f, fill, fill2, android.graphics.Shader.TileMode.CLAMP)
-            else android.graphics.LinearGradient(0f, t, 0f, bt, fill, fill2, android.graphics.Shader.TileMode.CLAMP)) else null
-    }
-
-    override fun draw(c: android.graphics.Canvas) {
-        fp.color = fill
-        c.drawPath(path, fp)
-        if (strokePx > 0 && strokeColor != 0) { sp.color = strokeColor; sp.strokeWidth = strokePx.toFloat(); c.drawPath(path, sp) }
-        if (mode == 1 && edge != 0) {
-            val b = bounds
-            sp.color = edge; sp.strokeWidth = 3f
-            val big = minOf(radius * 0.6f, minOf(b.width(), b.height()) * 0.3f)
-            c.drawLine(b.left + big, b.top + 1.5f, b.right.toFloat(), b.top + 1.5f, sp)
-        }
-    }
-    override fun setAlpha(a: Int) { fp.alpha = a; sp.alpha = a }
-    override fun setColorFilter(cf: android.graphics.ColorFilter?) { fp.colorFilter = cf; sp.colorFilter = cf }
-    @Suppress("DEPRECATION") override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
-}
