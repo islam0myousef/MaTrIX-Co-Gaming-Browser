@@ -539,7 +539,7 @@ class SettingsScreen(
         val rows = ArrayList<View>()
         for (th in Themes.picker) {
             val dot = TextView(a).apply { background = Ui.oval(th.accent) }
-            val r = rowBase(null, if (th.id == "auto") "GX Neon (الافتراضي)" else th.name, null, if (th.id == cur) icon("check", theme.accent, 20) else null) { a.applyTheme(th.id) }
+            val r = rowBase(null, if (th.id == "auto") "GX Red (الافتراضي)" else th.name, null, if (th.id == cur) icon("check", theme.accent, 20) else null) { a.applyTheme(th.id) }
             (r as LinearLayout).addView(dot, 0, LinearLayout.LayoutParams(dp(16), dp(16)).apply { marginEnd = dp(14) })
             rows.add(r)
         }
@@ -587,7 +587,7 @@ class SettingsScreen(
     private fun gxmods(col: LinearLayout) {
         section(col, "خلفية الصفحة الرئيسية")
         val cw = Cfg.str(Cfg.WALL, "gx")
-        val opts = listOf("gx" to "MaTrIX GX Neon (الافتراضية)", "none" to "بدون", "grid" to "Neon Grid (متحركة)", "embers" to "Embers — جمرات (متحركة)", "matrix" to "Matrix (متحركة)", "aurora" to "Aurora — تدرّج متحرك", "custom" to "صورة من المعرض")
+        val opts = listOf("gx" to "MaTrIX GX Red (الافتراضية)", "none" to "بدون", "grid" to "Neon Grid (متحركة)", "embers" to "Embers — جمرات (متحركة)", "matrix" to "Matrix (متحركة)", "aurora" to "Aurora — تدرّج متحرك", "custom" to "صورة من المعرض")
         card(col, opts.map { (k, name) ->
             radio(name, k == cw, if (k == "custom") "هتبقى كمان خلفية صفحة الساعة والطبيعة" else null) {
                 if (k == "custom") a.pickWallpaper() else { Cfg.setStr(Cfg.WALL, k); a.reloadHomeIfShown(); render() }

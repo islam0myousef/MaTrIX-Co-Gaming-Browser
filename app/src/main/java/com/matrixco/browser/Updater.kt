@@ -73,7 +73,7 @@ object Updater {
                 val url = a.optString("browser_download_url")
                 if (a.optString("name").endsWith(".apk") && url.startsWith(PREFIX)) {
                     val d = a.optString("digest", "")
-                    return Info(tag, tag.removePrefix("v"), o.optString("body", "").take(800), url, a.optLong("size"),
+                    return Info(tag, tag.removePrefix("v"), (if (o.isNull("body")) "" else o.optString("body", "").trim().let { if (it.equals("null", true)) "" else it }).take(800), url, a.optLong("size"),
                         if (d.startsWith("sha256:")) d.removePrefix("sha256:") else null)
                 }
             }
@@ -248,19 +248,19 @@ class UpdateUi(private val a: MainActivity, private val ui: UiKit) {
         d.requestWindowFeature(Window.FEATURE_NO_TITLE)
         var cancelled = false
         var busy = false
-        fun rounded(color: Int, stroke: Int = Color.TRANSPARENT, radius: Int = 20): GradientDrawable =
-            GradientDrawable().apply { setColor(color); cornerRadius = dp(radius).toFloat(); if (stroke != Color.TRANSPARENT) setStroke(dp(1), stroke) }
+        fun rounded(color: Int, stroke: Int = Color.TRANSPARENT, radius: Int = 20): android.graphics.drawable.Drawable =
+            Ui.round(color, dp(radius).toFloat(), if (stroke != Color.TRANSPARENT) stroke else 0, if (stroke != Color.TRANSPARENT) dp(1) else 0)
 
         // Real colors sampled from reference art: deep navy-violet card (neon "Version Update" dialog),
         // violet→magenta glow accent (same dialog's glowing geometric number), and the Earth2 teal
         // progress/brand accent (bright fill on a dark teal track).
-        val navyTop = 0xFF24183C.toInt()
-        val navyBottom = 0xFF0F0917.toInt()
-        val violet = 0xFF3F46B1.toInt()
-        val magenta = 0xFFBF6ED7.toInt()
-        val teal = 0xFF02B099.toInt()
-        val tealDark = 0xFF00433C.toInt()
-        val cyan = 0xFF89C0D5.toInt()
+        val navyTop = 0xFF1A0E26.toInt()
+        val navyBottom = 0xFF08050C.toInt()
+        val violet = 0xFFFF1B4D.toInt()
+        val magenta = 0xFF8A2BFF.toInt()
+        val teal = 0xFF00E5FF.toInt()
+        val tealDark = 0xFF00323B.toInt()
+        val cyan = 0xFF00E5FF.toInt()
 
         val card = FrameLayout(a).apply {
             background = rounded(navyTop, (0x4A000000.toInt() or (cyan and 0x00FFFFFF)), 28)
@@ -280,7 +280,7 @@ class UpdateUi(private val a: MainActivity, private val ui: UiKit) {
         header.addView(TextView(a).apply {
             text = "  ◆  MATRIX GX  •  SYSTEM UPDATE  "; textSize = 10f; letterSpacing = 0.1f
             setTextColor(Color.WHITE); typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
-            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(violet, magenta)).apply { cornerRadius = dp(20).toFloat() }
+            background = Ui.grad(violet, magenta, dp(16).toFloat(), 0, 0, false)
             setPadding(dp(10), dp(5), dp(10), dp(5))
         }, LinearLayout.LayoutParams(0, -2, 1f))
         header.addView(TextView(a).apply {
@@ -291,15 +291,15 @@ class UpdateUi(private val a: MainActivity, private val ui: UiKit) {
         content.addView(header)
 
         content.addView(TextView(a).apply {
-            text = "UPDATE AVAILABLE"; textSize = 21f; gravity = Gravity.CENTER; setTextColor(Color.WHITE)
+            text = "NEW BUILD UNLOCKED"; textSize = 21f; setShadowLayer(16f, 0f, 0f, violet); gravity = Gravity.CENTER; setTextColor(Color.WHITE)
             typeface = Typeface.create("sans-serif-black", Typeface.BOLD); letterSpacing = 0.035f; setPadding(0, dp(16), 0, dp(2))
         })
         content.addView(TextView(a).apply {
             text = "${info.version}  •  ${if (info.size > 0) mb(info.size) + " MB" else "NEW VERSION"}"
             textSize = 13f; gravity = Gravity.CENTER; setTextColor(teal); typeface = Typeface.create("sans-serif-medium", Typeface.BOLD); setPadding(0, 0, 0, dp(12))
         })
-        if (info.notes.isNotBlank()) content.addView(TextView(a).apply {
-            text = info.notes.trim(); textSize = 12f; setTextColor(0xFFDCD6EB.toInt()); gravity = Gravity.CENTER
+        content.addView(TextView(a).apply {
+            text = info.notes.trim().ifEmpty { "تحديث جديد فيه تحسينات وإصلاحات وتطوير في الأمان" }; textSize = 12f; setTextColor(0xFFDCD6EB.toInt()); gravity = Gravity.CENTER
             maxLines = 3; ellipsize = android.text.TextUtils.TruncateAt.END; setLineSpacing(0f, 1.12f)
             setPadding(dp(8), dp(4), dp(8), dp(10))
         })
@@ -314,7 +314,7 @@ class UpdateUi(private val a: MainActivity, private val ui: UiKit) {
         }
         content.addView(bar, LinearLayout.LayoutParams(-1, dp(8)))
         val metrics = TextView(a).apply {
-            text = "SECURE UPDATE  •  RESUME SUPPORTED"; textSize = 9f; gravity = Gravity.CENTER; letterSpacing = 0.08f
+            text = "SECURE DROP  •  RESUME READY"; textSize = 9f; gravity = Gravity.CENTER; letterSpacing = 0.08f
             setTextColor(cyan); setPadding(0, dp(11), 0, dp(3))
         }
         content.addView(metrics)
@@ -324,8 +324,7 @@ class UpdateUi(private val a: MainActivity, private val ui: UiKit) {
         fun actionButton(label: String, primary: Boolean, click: () -> Unit) = TextView(a).apply {
             text = label; textSize = 13f; gravity = Gravity.CENTER; typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
             setTextColor(Color.WHITE)
-            background = if (primary) GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(violet, magenta)).apply { cornerRadius = dp(15).toFloat() }
+            background = if (primary) Ui.grad(violet, magenta, dp(18).toFloat(), violet.and(0x00FFFFFF) or 0xAA000000.toInt(), dp(1), false)
                 else rounded(0x552A2638, (0x66000000.toInt() or (cyan and 0x00FFFFFF)), 15)
             setPadding(dp(12), dp(13), dp(12), dp(13)); isClickable = true; isFocusable = true; setOnClickListener { click() }
         }

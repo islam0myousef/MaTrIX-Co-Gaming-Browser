@@ -2072,7 +2072,7 @@ class MainActivity : Activity() {
         d.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
         val bg = Color.rgb(9, 10, 16); val card = Color.rgb(20, 23, 35); val card2 = Color.rgb(29, 34, 49)
         val txt = Color.WHITE; val sub = Color.rgb(157, 166, 190); val teal = theme.accent2
-        val sheet = android.graphics.drawable.GradientDrawable().apply { setColor(bg); val r = dp(26).toFloat(); cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f) }
+        val sheet = Ui.topRound(bg, dp(26).toFloat(), theme.accent)
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_RTL; setPadding(dp(14), dp(14), dp(14), dp(18)) }
         val sv = ScrollView(this).apply { isVerticalScrollBarEnabled = false; background = sheet; addView(col, ViewGroup.LayoutParams(MATCH, WRAP)) }
 

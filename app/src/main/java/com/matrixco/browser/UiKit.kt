@@ -39,7 +39,7 @@ class UiKit(private val act: Activity) {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
             setPadding(dp(14), dp(12), dp(14), dp(16))
-            background = Ui.topRound(theme.surface, dp(20).toFloat())
+            background = Ui.topRound(theme.surface, dp(22).toFloat(), theme.accent)
         }
         sv.addView(box, ViewGroup.LayoutParams(MATCH, WRAP))
         build(box, d)
@@ -58,7 +58,8 @@ class UiKit(private val act: Activity) {
     }
 
     fun titleView(text: String) = TextView(act).apply {
-        this.text = text; textSize = 16f; setTextColor(theme.text); typeface = Typeface.DEFAULT_BOLD
+        this.text = text; textSize = 16f; setTextColor(theme.text); typeface = Typeface.DEFAULT_BOLD; letterSpacing = 0.03f
+        setShadowLayer(12f, 0f, 0f, theme.accent.withAlpha(170))
         setPadding(dp(4), dp(2), dp(4), dp(10))
     }
 
@@ -76,7 +77,7 @@ class UiKit(private val act: Activity) {
     fun iconTile(emoji: String, color: Int, size: Int = 40): TextView = TextView(act).apply {
         text = emoji; textSize = size * 0.42f; gravity = Gravity.CENTER
         setTextColor(theme.text)
-        background = Ui.oval(theme.surface2)
+        background = Ui.hex(theme.surface2, color.withAlpha(150), dp(1))
         minimumWidth = dp(size); minimumHeight = dp(size)
     }
 
@@ -85,7 +86,7 @@ class UiKit(private val act: Activity) {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(10), dp(8), dp(12), dp(8))
-            background = Ui.round(theme.surface2, dp(12).toFloat())
+            background = rowBg(checked == true)
             setOnClickListener { onClick() }
         }
         r.addView(iconTile(icon, color, 34), LinearLayout.LayoutParams(dp(34), dp(34)).apply { marginEnd = dp(10) })
@@ -111,11 +112,15 @@ class UiKit(private val act: Activity) {
         sw.trackTintList = ColorStateList(states, intArrayOf(theme.accent.withAlpha(110), theme.sub.withAlpha(70)))
     }
 
+    /** خلفية الصف: لو شغّال تاخد إطار نيون بلون الثيم (Glow) */
+    fun rowBg(on: Boolean) = if (on) Ui.round(theme.surface2, dp(12).toFloat(), theme.accent.withAlpha(190), dp(1))
+        else Ui.round(theme.surface2, dp(12).toFloat(), theme.accent.withAlpha(28), dp(1))
+
     fun toggleRow(icon: String, title: String, sub: String?, initial: Boolean, color: Int = theme.accent, onChange: (Boolean) -> Unit): View {
         var state = initial
         val v = row(icon, title, sub, state, color) {} as LinearLayout
         val sw = v.getChildAt(2) as Switch
-        v.setOnClickListener { state = !state; applySwitch(sw, state); onChange(state) }
+        v.setOnClickListener { state = !state; applySwitch(sw, state); v.background = rowBg(state); onChange(state) }
         return v
     }
 
@@ -123,7 +128,8 @@ class UiKit(private val act: Activity) {
         this.text = text; textSize = 13f; gravity = Gravity.CENTER
         setTextColor(if (primary) Color.WHITE else theme.text)
         setPadding(dp(16), dp(10), dp(16), dp(10))
-        background = if (primary) Ui.round(theme.accent, dp(12).toFloat()) else Ui.round(theme.surface2, dp(12).toFloat())
+        background = if (primary) Ui.grad(theme.accent, theme.accent.darker(0.72f), dp(12).toFloat(), theme.accent.withAlpha(120), dp(1), false) else Ui.round(theme.surface2, dp(12).toFloat(), theme.accent.withAlpha(90), dp(1))
+        typeface = Typeface.DEFAULT_BOLD; if (primary) setShadowLayer(8f, 0f, 0f, theme.accent.withAlpha(200))
         setOnClickListener { onClick() }
     }
 
