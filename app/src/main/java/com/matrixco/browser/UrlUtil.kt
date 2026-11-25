@@ -6,11 +6,14 @@ import java.util.Locale
 object UrlUtil {
     private val trackingParams = setOf(
         "fbclid", "gclid", "gclsrc", "dclid", "msclkid", "yclid", "mc_eid", "mc_cid", "igshid",
-        "_hsenc", "_hsmi", "mkt_tok", "vero_id", "twclid", "ttclid", "wbraid", "gbraid", "ref_src"
+        "_hsenc", "_hsmi", "mkt_tok", "vero_id", "twclid", "ttclid", "wbraid", "gbraid", "ref_src", "spm", "scm"
     )
+    // "ref" معناها فرع/مرجع في مواقع الكود، فبنشيلها من غير المواقع دي بس
+    private val refKeepHosts = setOf("github.com", "gitlab.com", "bitbucket.org", "huggingface.co", "sourceforge.net")
 
-    private fun isTracking(name: String): Boolean {
+    private fun isTracking(name: String, host: String = ""): Boolean {
         val n = name.lowercase(Locale.ROOT)
+        if (n == "ref") return host.isNotEmpty() && refKeepHosts.none { host == it || host.endsWith(".$it") }
         return n.startsWith("utm_") || n in trackingParams
     }
 
@@ -19,11 +22,13 @@ object UrlUtil {
         return try {
             val uri = Uri.parse(url)
             if (!uri.isHierarchical) return url
+            val host = (uri.host ?: "").lowercase(Locale.ROOT)
+            if (host == "mx.home" || host == "mx.blocked") return url
             val names = uri.queryParameterNames
-            if (names.none { isTracking(it) }) return url
+            if (names.none { isTracking(it, host) }) return url
             val b = uri.buildUpon().clearQuery()
             for (n in names) {
-                if (isTracking(n)) continue
+                if (isTracking(n, host)) continue
                 for (v in uri.getQueryParameters(n)) b.appendQueryParameter(n, v)
             }
             b.build().toString()

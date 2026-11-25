@@ -625,9 +625,9 @@ body.opera .top{margin-bottom:22px}
     private fun warn(t: MxTheme, url: String): String {
         val sb = StringBuilder()
         sb.append("<div class=\"empty\" style=\"padding-top:60px\"><div style=\"font-size:54px\">⛔</div><h2 style=\"color:#F28B82;font-weight:600\">موقع خطير</h2>")
-        sb.append("<p>الدرع رصد إن الموقع ده في قوائم البرمجيات الخبيثة أو التصيّد. ننصحك بعدم المتابعة.</p>")
+        sb.append("<p>الدرع رصد إن الموقع ده في قوائم البرمجيات الخبيثة أو التصيّد. الدرع منعه تلقائيًا. (وضع الخبير من الإعدادات لو عاوز تتخطى.)</p>")
         sb.append("<div style=\"direction:ltr;word-break:break-all;font-size:12px\">").append(esc(url)).append("</div><br>")
-        sb.append("<a class=\"btn\" href=\"mx://back\">رجوع للأمان</a>").append(if (isWebUrl(url)) "<a class=\"btn alt\" href=\"mx://proceed?u=" + Uri.encode(url) + "\">أفهم المخاطر، تابع</a>" else "").append("</div>")
+        sb.append("<a class=\"btn\" href=\"mx://back\">رجوع للأمان</a>").append(if (isWebUrl(url) && Cfg.bool(Cfg.EXPERT, false)) "<a class=\"btn alt\" href=\"mx://proceed?u=" + Uri.encode(url) + "\">أفهم المخاطر، تابع</a>" else "").append("</div>")
         return page(t, "تحذير", sb.toString())
     }
 }

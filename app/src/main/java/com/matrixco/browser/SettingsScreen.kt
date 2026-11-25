@@ -72,13 +72,13 @@ class SettingsScreen(
         val page = stack.last()
         val col = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(4), dp(12), dp(40)) }
         val title = when (page) {
-            "main" -> "الإعدادات"; "privacy" -> "الدرع والخصوصية"; "spy" -> "كاشف التجسس"; "ai" -> "المساعد الذكي (Claude)"
+            "main" -> "الإعدادات"; "privacy" -> "الدرع والخصوصية"; "spy" -> "كاشف التجسس"; "ai" -> "المساعد الذكي (Claude)"; "vt" -> "الفحص السحابي (VirusTotal)"
             "appearance" -> "المظهر"; "search" -> "محرك البحث"; "storage" -> "المساحة والأداء"; "games" -> "الألعاب"
             "browsing" -> "التصفح"; "about" -> "حول MaTrIX Co"; "gxmods" -> "GX Mods"; "gxcontrol" -> "GX Control"; "filters" -> "عوامل تصفية المحتوى"; "iron" -> "الجدار الحديدي"; "lists" -> "قوائم الحجب"; "network" -> "الشبكة والـ VPN"; "gestures" -> "إيماءات التبويبات"; "keywords" -> "حجب بالكلمات"; "customrules" -> "عوامل تصفية مخصصة"; else -> "الإعدادات"
         }
         titleView.text = title
         when (page) {
-            "main" -> main(col); "privacy" -> privacy(col); "spy" -> spy(col); "ai" -> ai(col); "appearance" -> appearance(col)
+            "main" -> main(col); "privacy" -> privacy(col); "spy" -> spy(col); "ai" -> ai(col); "vt" -> vt(col); "appearance" -> appearance(col)
             "search" -> search(col); "storage" -> storage(col); "games" -> games(col); "browsing" -> browsing(col); "about" -> about(col)
             "gxmods" -> gxmods(col); "gxcontrol" -> gxcontrol(col)
             "iron" -> iron(col); "lists" -> blockLists(col); "network" -> network(col); "gestures" -> gestures(col); "filters" -> filters(col); "customrules" -> customRules(col); "keywords" -> keywordsPage(col)
@@ -163,6 +163,7 @@ class SettingsScreen(
         section(col, "البيانات")
         card(col, listOf(
             action("trash", "مسح بيانات التصفح", "كوكيز، كاش، سجل") { a.confirmClear() },
+            action("trash", "🚨 مسح فوري", "كل حاجة + قفل كل التابات") { a.panicWipe() },
             action("share", "نسخ احتياطي", "ملف فيه إعداداتك ومفضلتك وفلاترك وكلماتك") { a.exportBackup() },
             action("download", "استرجاع نسخة", "من ملف نسخة احتياطية") { close(); a.importBackup() }
         ))
@@ -187,12 +188,17 @@ class SettingsScreen(
             toggle("lock", "HTTPS أولًا", "يفتح كل موقع بتشفير ويرجع HTTP لو مش مدعوم", Cfg.HTTPS_ONLY, true),
             toggle("shield", "منع المحتوى المختلط", "http داخل صفحات https", Cfg.MIXED, true) { a.refreshHostSettings() },
             toggle("shield_check", "Safe Browsing من جوجل", "حماية إضافية من التصيّد", Cfg.SAFEB, true),
-            toggle("download", "تحذير الملفات الخطرة", "apk / exe / jar ...", Cfg.DLWARN, true)
+            toggle("download", "تحذير الملفات الخطرة", "apk / exe / jar ... مع اسم المصدر", Cfg.DLWARN, true),
+            toggle("shield_check", "خزنة التحميل (حجب وحذف تلقائي)", "تفحص قبل وبعد التحميل وتحذف المشبوه من غير سؤال", Cfg.DLVAULT, true),
+            toggle("shield", "وضع الخبير", "يسمح بتخطي حجب الخزنة والمواقع الخبيثة بإيدك (مش مفضّل)", Cfg.EXPERT, false),
+            toggle("shield", "محطّم التجسس", "يقطع إشارات التتبع الخفية (beacon / ping / referrer / window.name)", Cfg.WRECK, true),
+            toggle("shield", "تنضيف روابط التتبع", "يشيل utm وfbclid وgclid وأشكالهم من الروابط", Cfg.STRIPTRK, true),
+            nav("shield_check", "الفحص السحابي (VirusTotal)", if (Cfg.str(Cfg.VTKEY, "").isNotEmpty()) "مفعّل — بيفحص بصمة كل تحميل سحابيًا" else "مفتاح API مجاني — بيبعت البصمة بس مش الملف") { push("vt") }
         ))
         section(col, "الخصوصية")
         card(col, listOf(
             toggle("incognito", "تشويش بصمة المتصفح", "Canvas ومعلومات الجهاز", Cfg.FP, true),
-            toggle("t:🍪", "كوكيز الطرف الثالث", "الأفضل تفضل مقفولة", Cfg.TPCOOK, false) { a.applyThirdPartyCookies(it) },
+            toggle("t:🍪", "السماح بكوكيز الطرف الثالث", "مقفولة = محظورة (الافتراضي). تقدر تستثني موقع من درع الموقع", Cfg.TPCOOK, false) { a.applyThirdPartyCookies(it) },
             toggle("trash", "مسح تلقائي عند الخروج", "كوكيز + كاش + سجل", Cfg.AUTOCLEAR, false),
             toggle("lock", "قفل التطبيق", "بصمة أو PIN الجهاز عند الرجوع", Cfg.APPLOCK, false)
         ))
@@ -501,6 +507,21 @@ class SettingsScreen(
         })
         section(col, "السجل")
         card(col, listOf(action("history", "سجل الرصد", "كل الحالات والقرارات") { close(); a.openInternalPage("/spy") }))
+    }
+
+    private fun vt(col: LinearLayout) {
+        col.addView(TextView(a).apply { text = "بيفحص بصمة SHA-256 لأي تحميل على قاعدة VirusTotal (أكتر من 70 محرك حماية). الملف نفسه مبيتبعتش أبدًا — البصمة بس. لو ولا محرك واحد علّم عليه، الخزنة بتحذفه فورًا. الحصة المجانية حوالي 500 فحص في اليوم (4 في الدقيقة). اجيب مفتاحك المجاني من virustotal.com ← البروفايل ← API key."; textSize = 12f; setTextColor(theme.sub); setPadding(dp(8), dp(10), dp(8), dp(10)) })
+        val key: EditText = ui.input("مفتاح VirusTotal API", false, Cfg.str(Cfg.VTKEY, ""))
+        col.addView(key); col.addView(ui.space(12))
+        col.addView(ui.button("حفظ") {
+            Cfg.setStr(Cfg.VTKEY, key.text.toString().trim()); a.toastMsg("اتحفظ")
+        })
+        if (Cfg.str(Cfg.VTKEY, "").isNotEmpty()) {
+            col.addView(ui.space(8))
+            col.addView(ui.button("مسح المفتاح", false) {
+                Cfg.setStr(Cfg.VTKEY, ""); a.toastMsg("اتمسح — الفحص رجع محلي بس"); render()
+            })
+        }
     }
 
     private fun ai(col: LinearLayout) {

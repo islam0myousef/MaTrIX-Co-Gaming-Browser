@@ -92,6 +92,13 @@ object IronGuard {
         for ((brand, _) in brands) {
             if (host.contains(brand) && !isBrandHost(brand, host)) { add(45, "الموقع بيقلّد اسم $brand"); break }
         }
+        if (!isIp(host) && labels.size >= 2) {
+            val core = labels[labels.size - 2]
+            val letters = core.count { it.isLetter() }; val digits = core.count { it.isDigit() }
+            val vowels = core.count { it in "aeiouy" }
+            if (core.length >= 12 && ((letters > 0 && digits >= 4) || (letters >= 10 && vowels * 100 / letters < 20))) add(25, "اسم النطاق يبدو مولّدًا آليًا (DGA)")
+            if (core.count { it == '-' } >= 4) add(15, "نطاق فيه شرطات كتير (نمط تصيّد)")
+        }
         if (redirects > 2) add(30, "سلسلة تحويلات طويلة")
         if (!local && AdBlocker.isMaliciousPage(host)) add(100, "الموقع في قوائم الخبيث/التصيد")
         return if (s >= threshold()) Verdict(minOf(s, 100), why) else null

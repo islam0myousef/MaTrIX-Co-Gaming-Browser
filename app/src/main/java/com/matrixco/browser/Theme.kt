@@ -107,12 +107,18 @@ object Cfg {
         migrateSecrets()
     }
 
+    /** المفاتيح السرّية اللي بتتخزن مشفّرة (زي مفاتيح الـ API) */
+    private fun isSecret(k: String) = k == APIKEY || k == VTKEY
+
     /** ينقل المفاتيح الحساسة من التخزين العادي للتخزين المشفر مرة واحدة */
     private fun migrateSecrets() {
         val sec = ep ?: return
-        if (::p.isInitialized && p.contains(APIKEY)) {
-            sec.edit().putString(APIKEY, p.getString(APIKEY, "")).apply()
-            p.edit().remove(APIKEY).apply()
+        if (!::p.isInitialized) return
+        for (k in listOf(APIKEY, VTKEY)) {
+            if (p.contains(k)) {
+                sec.edit().putString(k, p.getString(k, "")).apply()
+                p.edit().remove(k).apply()
+            }
         }
     }
 
@@ -120,9 +126,9 @@ object Cfg {
     fun bool(k: String, d: Boolean) = p.getBoolean(k, d)
     fun setBool(k: String, v: Boolean) = p.edit().putBoolean(k, v).apply()
     fun str(k: String, d: String = ""): String =
-        if (k == APIKEY && ep != null) ep!!.getString(k, d) ?: d else p.getString(k, d) ?: d
+        if (isSecret(k) && ep != null) ep!!.getString(k, d) ?: d else p.getString(k, d) ?: d
     fun setStr(k: String, v: String) {
-        if (k == APIKEY && ep != null) ep!!.edit().putString(k, v).apply()
+        if (isSecret(k) && ep != null) ep!!.edit().putString(k, v).apply()
         else p.edit().putString(k, v).apply()
     }
     fun int(k: String, d: Int) = p.getInt(k, d)
@@ -140,6 +146,9 @@ object Cfg {
     const val FP = "fp_noise"
     const val SAFEB = "safe_browsing"
     const val DLWARN = "dl_warn"
+    const val DLVAULT = "dl_vault"
+    const val EXPERT = "expert_override"
+    const val WRECK = "spy_wrecker"
     const val AUTOCLEAR = "autoclear"
     const val CACHE_MB = "cache_mb"
     const val DARK = "dark_pages"
@@ -147,10 +156,12 @@ object Cfg {
     const val BGAUDIO = "bg_audio"
     const val APPLOCK = "app_lock"
     const val APIKEY = "api_key"
+    const val VTKEY = "vt_api_key"
     const val MODEL = "api_model"
     const val THEME = "theme"
     const val ENGINE = "engine"
     const val TPCOOK = "tp_cookies"
+    const val STRIPTRK = "strip_tracking"
     const val FPS = "fps_overlay"
     const val GESTURES = "gestures"
     const val SHOWFAB = "show_fab"

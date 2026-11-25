@@ -548,7 +548,7 @@ class ShieldDatabase private constructor(private val ctx: Context) :
     }
 
     // ───────────── وضع التوافق (راوترات/مواقع قديمة) ─────────────
-    // flags: 1 = HTTP مسموح ، 2 = تجاوز أخطاء الشهادة ، 4 = محتوى مختلط مسموح
+    // flags: 16 = السماح بكوكيز الطرف الثالث للموقع ; 8 = السماح بالروابط الخارجية للموقع ; 1 = HTTP مسموح ، 2 = تجاوز أخطاء الشهادة ، 4 = محتوى مختلط مسموح
 
     fun getLegacy(host: String): Int =
         readableDatabase.rawQuery("SELECT flags FROM legacy_hosts WHERE host = ?", arrayOf(host.lowercase(Locale.ROOT))).use { if (it.moveToFirst()) it.getInt(0) else 0 }

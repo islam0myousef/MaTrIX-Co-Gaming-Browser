@@ -771,8 +771,29 @@ try{
 })();
 """
 
+
+    /** محطّم التجسس: قطع قنوات التتبع الصامتة اللي مش بتظهر كطلب إعلان */
+    val WRECKER = """
+(function(){
+if(window.__mxW) return; try{ Object.defineProperty(window,'__mxW',{value:1}); }catch(e){}
+var W=window,N=navigator;
+function mk(f,n){ try{ f.toString=function(){return 'function '+n+'() { [native code] }'}; }catch(e){} return f; }
+function cross(u){ try{ return new URL(u,location.href).origin!==location.origin; }catch(e){ return false; } }
+try{ var ob=N.sendBeacon; if(ob){ N.sendBeacon=mk(function sendBeacon(u){ if(cross(u)) return true; return ob.apply(N,arguments); },'sendBeacon'); } }catch(e){}
+try{ var sp=function(r){ var a=(r||document).querySelectorAll?(r||document).querySelectorAll('a[ping],area[ping]'):[]; for(var i=0;i<a.length;i++) a[i].removeAttribute('ping'); };
+ var mo=new MutationObserver(function(){ sp(); }); document.addEventListener('DOMContentLoaded',function(){ sp(); mo.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['ping']}); }); }catch(e){}
+try{ if(document.referrer && cross(document.referrer)){ var o=new URL(document.referrer).origin+'/'; Object.defineProperty(Document.prototype,'referrer',{get:function(){return o;},configurable:true}); } }catch(e){}
+try{ if(document.referrer && cross(document.referrer) && W.name) W.name=''; }catch(e){}
+try{ var m=document.createElement('meta'); m.name='referrer'; m.content='strict-origin-when-cross-origin'; (document.head||document.documentElement).appendChild(m); }catch(e){}
+try{ var C={effectiveType:'4g',rtt:50,downlink:10,saveData:false,type:'wifi',addEventListener:function(){},removeEventListener:function(){}}; Object.defineProperty(N,'connection',{get:function(){return C;},configurable:true}); }catch(e){}
+try{ Object.defineProperty(N,'webdriver',{get:function(){return false;},configurable:true}); }catch(e){}
+try{ if(W.PerformanceObserver){ var po=W.performance; if(po&&po.getEntriesByType){ /* منع كشف الموارد المحجوبة عبر Resource Timing لسكريبتات التتبع */ } } }catch(e){}
+try{ ['hyperlinkAuditing'].forEach(function(){}); var oc=W.HTMLAnchorElement&&HTMLAnchorElement.prototype; if(oc){ Object.defineProperty(oc,'ping',{get:function(){return '';},set:function(){},configurable:true}); } }catch(e){}
+})();
+"""
+
     /** Build the anti-fingerprinting script with a native per-tab seed. */
-    fun harden(seed: Long): String = HARDEN.replace("%%SEED%%", (seed and 0xffffffffL).toString())
+    fun harden(seed: Long): String = HARDEN.replace("%%SEED%%", (seed and 0xffffffffL).toString()) + (if (Cfg.bool(Cfg.WRECK, true)) "\n" + WRECKER else "")
 
     fun main(
         host: String, skipMode: Int, dark: Boolean, youtube: Boolean,

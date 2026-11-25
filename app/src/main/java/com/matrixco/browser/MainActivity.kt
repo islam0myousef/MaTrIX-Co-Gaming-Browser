@@ -206,7 +206,57 @@ class MainActivity : Activity() {
 
     private val dlReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context?, i: Intent?) {
-            if (i?.action == DownloadManager.ACTION_DOWNLOAD_COMPLETE) toast("✅ اكتمل التحميل")
+            if (i?.action == DownloadManager.ACTION_DOWNLOAD_COMPLETE) {
+                val dmId = i.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
+                if (dmId >= 0 && Cfg.bool(DownloadVault.ON, true)) {
+                    io.execute {
+                        val mine = try { db.getDownloads(500).any { it.dmId == dmId } } catch (_: Exception) { false }
+                        if (!mine) return@execute
+                        val r = try { DownloadVault.scan(this@MainActivity, dmId) } catch (_: Throwable) { null }
+                        h.post {
+                            if (r == null || r.state == DownloadVault.SKIP) toast("✅ اكتمل التحميل")
+                            else if (r.state == DownloadVault.BLOCKED || r.isApk || r.title.isNotEmpty()) ui.sheet { box, d ->
+                                box.addView(ui.titleView(r.title))
+                                box.addView(ui.infoView(r.name + "\n\n" + r.detail))
+                                // ☁️ إعادة الفحص السحابي يدويًا لو اتخطى (معدل/شبكة) وفيه مفتاح
+                                if (r.vtState == DownloadVault.VT_SKIP && r.sha.isNotEmpty() && Cfg.str(Cfg.VTKEY, "").isNotEmpty()) {
+                                    box.addView(ui.button("☁️ افحص الآن سحابيًا", false) {
+                                        d.dismiss()
+                                        toast("⏳ جاري الفحص السحابي بالبصمة...")
+                                        io.execute {
+                                            val v = try { VirusTotal.lookup(Cfg.str(Cfg.VTKEY, ""), r.sha) } catch (_: Throwable) { null }
+                                            h.post {
+                                                if (v == null) { toast("☁️ تعذر الفحص السحابي"); return@post }
+                                                if (v.state == VirusTotal.DETECTED) {
+                                                    try { (getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).remove(dmId) } catch (_: Throwable) {}
+                                                    ui.sheet { b2, d2 ->
+                                                        b2.addView(ui.titleView("🛡️ الخزنة حذفت الملف"))
+                                                        b2.addView(ui.infoView(r.name + "\n\nالفحص السحابي: " + v.detections + "/" + v.total + " محرك علّم عليه\n" + v.link))
+                                                        b2.addView(ui.button("تمام") { d2.dismiss() })
+                                                    }
+                                                } else ui.sheet { b2, d2 ->
+                                                    b2.addView(ui.titleView("☁️ نتيجة الفحص السحابي"))
+                                                    b2.addView(ui.infoView(r.name + "\n\n" + when (v.state) {
+                                                        VirusTotal.CLEAN -> "نظيف: 0/" + v.total + " محرك علّم عليه\n" + v.link
+                                                        VirusTotal.UNKNOWN -> "البصمة غير معروفة لـ VirusTotal (مفيش سجل خبيث ليها)"
+                                                        else -> "اتخطى: " + v.message
+                                                    }))
+                                                    b2.addView(ui.button("تمام") { d2.dismiss() })
+                                                }
+                                            }
+                                        }
+                                    })
+                                }
+                                box.addView(ui.button("تمام") { d.dismiss() })
+                            } else toast(when (r.vtState) {
+                                DownloadVault.VT_CLEAN -> "✅ اكتمل التحميل والفحص السحابي نظيف"
+                                DownloadVault.VT_SKIP -> "✅ اكتمل التحميل وتم فحصه محليًا (السحابي اتخطى)"
+                                else -> "✅ اكتمل التحميل وتم فحصه"
+                            })
+                        }
+                    }
+                } else toast("✅ اكتمل التحميل")
+            }
         }
     }
 
@@ -822,7 +872,7 @@ class MainActivity : Activity() {
     private fun loadInTab(tab: Tab, input: String) {
         if (input.isBlank()) return
         if (IronGuard.blockedTypedScheme(input)) { toast("🚫 البروتوكول ده محظور"); return }
-        val target = smartUrl(tab, resolve(input))
+        val target = stripTrk(smartUrl(tab, resolve(input)))
         IronGuard.scoreUrl(this, target, 0)?.let { showRiskBlocked(tab, hostOf(target), target, it); return }
         AdultGuard.checkUrl(target)?.let { showBlocked(tab, hostOf(target), it); return }
         tab.web.loadUrl(target, mapOf("Sec-GPC" to "1", "DNT" to "1"))
@@ -1096,9 +1146,13 @@ class MainActivity : Activity() {
 
     private fun applyHostSettings(tab: Tab) {
         val flags = db.getLegacy(tab.host)
+        // كوكيز الطرف الثالث: محظورة افتراضيًا، والموقع المستثنى (bit 16) بيسمح بيها
+        try { CookieManager.getInstance().setAcceptThirdPartyCookies(tab.web, Cfg.bool(Cfg.TPCOOK, false) || (flags and 16) != 0) } catch (_: Exception) {}
         tab.web.settings.mixedContentMode =
             if ((flags and 4) != 0 || !Cfg.bool(Cfg.MIXED, true)) WebSettings.MIXED_CONTENT_ALWAYS_ALLOW else WebSettings.MIXED_CONTENT_NEVER_ALLOW
     }
+
+    private fun stripTrk(u: String): String = if (Cfg.bool(Cfg.STRIPTRK, true)) UrlUtil.stripTracking(u) else u
 
     private fun smartUrl(tab: Tab, url: String): String {
         if (url.startsWith("http://", true)) {
@@ -1197,6 +1251,7 @@ class MainActivity : Activity() {
             val u = url.orEmpty()
             if (tab.sleeping && u == "about:blank") { tab.progress = 100; return }
             tab.url = u; tab.progress = 100
+            if (u.startsWith("https://")) tab.upgradedFrom = null   // الترقية نجحت
             inject(tab); injectUserScripts(tab)
             h.postDelayed({ if (tabs.contains(tab) && tab === cur) captureThumb(tab) }, 900)
             scanAdult(tab); h.postDelayed({ scanAdult(tab) }, 1800)
@@ -1228,7 +1283,7 @@ class MainActivity : Activity() {
                     return true
                 }
                 "http" -> {
-                    val smart = smartUrl(tab, uri.toString())
+                    val smart = stripTrk(smartUrl(tab, uri.toString()))
                     if (smart != uri.toString()) { view?.loadUrl(smart); return true }
                     return false
                 }
@@ -1249,7 +1304,7 @@ class MainActivity : Activity() {
                         AdultGuard.checkUrl(uri.toString())?.let { showBlocked(tab, host, it); return true }
                         val safe = FilterEngine.safeSearch(uri.toString())
                         if (safe != uri.toString()) { view?.loadUrl(safe); return true }
-                        val cleaned = UrlUtil.stripTracking(uri.toString())
+                        val cleaned = stripTrk(uri.toString())
                         if (cleaned != uri.toString()) { view?.loadUrl(cleaned); return true }
                     }
                     return false
@@ -1260,7 +1315,15 @@ class MainActivity : Activity() {
                     val scheme = uri.scheme.orEmpty().lowercase(Locale.ROOT)
                     // External handlers are restricted regardless of IronGuard mode.
                     // Never parse arbitrary intent:// payloads from page content.
-                    if (IronGuard.externalSchemeAllowed(scheme) && req.hasGesture()) {
+                    if ((db.getLegacy(tab.host) and 8) != 0 && req.hasGesture() && scheme.isNotEmpty() && scheme != "javascript") {
+                        // موقع موثوق من المستخدم: يفتح الروابط الخارجية (تطبيقات) بضغطة فعلية فقط
+                        try {
+                            val ext = if (scheme == "intent") Intent.parseUri(uri.toString(), Intent.URI_INTENT_SCHEME)
+                                      else Intent(Intent.ACTION_VIEW, Uri.parse(uri.toString()))
+                            ext.addCategory(Intent.CATEGORY_BROWSABLE); ext.component = null; ext.selector = null
+                            startActivity(ext)
+                        } catch (_: Exception) { toast("مفيش تطبيق يفتح الرابط ده") }
+                    } else if (IronGuard.externalSchemeAllowed(scheme) && req.hasGesture()) {
                         try {
                             val safeUri = Uri.parse(uri.toString())
                             if (safeUri.scheme in setOf("mailto", "tel", "sms")) {
@@ -1597,7 +1660,7 @@ class MainActivity : Activity() {
     private fun openLegacy(tab: Tab, url: String) {
         val hh = hostOf(url)
         if (hh.isEmpty()) return
-        db.setLegacy(hh, 1 or 2 or 4)
+        db.setLegacy(hh, (db.getLegacy(hh) and 24) or 1 or 2 or 4)
         val u = if (url.startsWith("https://")) "http://" + url.substring(8) else url
         tab.web.loadUrl(u)
         toast("🕰 وضع التوافق القديم مفعّل لـ $hh")
@@ -1678,18 +1741,39 @@ class MainActivity : Activity() {
         else "$scheme://$host" + if (u.port != -1) ":${u.port}" else ""
     } catch (_: Exception) { null }
 
-    private fun startDownload(url: String, ua: String?, cd: String?, mime: String?, confirmed: Boolean = false) {
+    private fun startDownload(url: String, ua: String?, cd: String?, mime: String?, confirmed: Boolean = false, vaultOk: Boolean = false) {
         val origin = downloadOrigin(url)
         if (origin == null) { toast("🛡️ تم رفض رابط تنزيل غير آمن أو غير مدعوم"); return }
         val guessedName = URLUtil.guessFileName(url, cd, mime)
         val name = safeDownloadName(guessedName)
+        if (!vaultOk) {
+            val why = DownloadVault.preCheck(this, url, name, mime, cur?.url)
+            if (why != null) {
+                ui.sheet { box, d ->
+                    box.addView(ui.titleView("🛡️ الخزنة منعت التحميل"))
+                    box.addView(ui.infoView(name + "\nالمصدر: " + hostOf(url) + "\n\nالسبب: " + why +
+                        (if (Cfg.bool(Cfg.EXPERT, false)) "\n\nوضع الخبير شغّال: تقدر تكمّل على مسؤوليتك." else "\n\nالمنع تلقائي. (وضع الخبير في الإعدادات لو لازم تتخطى.)")))
+                    box.addView(ui.button("تمام") { d.dismiss() })
+                    if (Cfg.bool(Cfg.EXPERT, false)) {
+                        box.addView(ui.space(8))
+                        box.addView(ui.button("حمّل رغم كده", false) { d.dismiss(); DownloadVault.overrides.add(url); startDownload(url, ua, cd, mime, confirmed, true) })
+                    }
+                }
+                return
+            }
+        }
         if (!confirmed && Cfg.bool(Cfg.DLWARN, true) && riskyExt.any { name.lowercase(Locale.ROOT).endsWith(it) }) {
             ui.sheet { box, d ->
-                box.addView(ui.titleView("⚠ ملف قد يكون ضارًا"))
-                box.addView(ui.infoView(name + "\nالملفات التنفيذية والتطبيقات من مصادر مجهولة من أشهر طرق الاختراق. حمّله فقط لو بتثق في المصدر."))
+                val plain = url.startsWith("http://", true)
+                val ext = name.substringAfterLast('.', "").uppercase(Locale.ROOT)
+                val src = hostOf(url)
+                box.addView(ui.titleView(if (plain) "🚨 تحميل ملف تنفيذي من اتصال غير مشفّر" else "⚠ ملف قد يكون ضارًا"))
+                box.addView(ui.infoView(name + "\nنوع الملف: " + ext + "\nالمصدر: " + src +
+                    (if (plain) "\n\nالموقع ده HTTP من غير تشفير، يعني الملف ممكن يتبدّل في الطريق بملف خبيث. الأفضل تلغي." else "") +
+                    "\n\nالملفات التنفيذية والتطبيقات من مصادر مجهولة من أشهر طرق الاختراق. حمّله فقط لو بتثق في المصدر."))
                 box.addView(ui.button("إلغاء") { d.dismiss() })
                 box.addView(ui.space(8))
-                box.addView(ui.button("أثق في المصدر، حمّل", false) { d.dismiss(); startDownload(url, ua, cd, mime, true) })
+                box.addView(ui.button("أثق في المصدر، حمّل", false) { d.dismiss(); startDownload(url, ua, cd, mime, true, vaultOk) })
             }
             return
         }
@@ -2343,9 +2427,13 @@ class MainActivity : Activity() {
         if (!internal && t != null) {
             box.addView(divider())
             box.addView(swRow("تخطي الانتظار التلقائي", "لهذا الموقع", t.skipMode != 0) { on -> t.skipMode = if (on) 1 else 0; io.execute { db.setSkipMode(host, if (on) null else 0) }; reloadSoon() })
-            box.addView(swRow("وضع التوافق القديم", "HTTP وشهادات قديمة (راوترات/مواقع قديمة)", db.getLegacy(host) != 0) { on -> db.setLegacy(host, if (on) 7 else 0); reloadSoon() })
+            box.addView(swRow("وضع التوافق القديم", "HTTP وشهادات قديمة (راوترات/مواقع قديمة)", (db.getLegacy(host) and 7) != 0) { on -> db.setLegacy(host, (db.getLegacy(host) and 24) or (if (on) 7 else 0)); reloadSoon() })
+            box.addView(swRow("السماح بالروابط الخارجية", "يفتح روابط التطبيقات (زي تليجرام) من هذا الموقع بس", (db.getLegacy(host) and 8) != 0) { on -> db.setLegacy(host, (db.getLegacy(host) and 23) or (if (on) 8 else 0)) })
+            box.addView(swRow("السماح بكوكيز الطرف الثالث", "استثناء لهذا الموقع بس (الافتراضي: محظورة)", (db.getLegacy(host) and 16) != 0) { on -> db.setLegacy(host, (db.getLegacy(host) and 15) or (if (on) 16 else 0)); applyHostSettings(t); reloadSoon() })
         }
         box.addView(divider())
+        box.addView(ui.button("🚨 مسح فوري (سجل، كوكيز، كاش، تابات)", false) { panicWipe() })
+        box.addView(ui.space(6))
         val btns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutDirection = View.LAYOUT_DIRECTION_RTL }
         btns.addView(ui.button("تقرير الدرع", false) { dismissShield(); openInternal("/shield") }, LinearLayout.LayoutParams(0, WRAP, 1f).apply { marginEnd = dp(6) })
         btns.addView(ui.button("⚡ تخطي الانتظار", false) { dismissShield(); skipNow() }, LinearLayout.LayoutParams(0, WRAP, 1f))
@@ -2671,7 +2759,7 @@ class MainActivity : Activity() {
     internal fun openDownloadsManager() = showDownloads()
     internal fun openPerformanceLab() = showPerformanceLab()
     internal fun refreshHostSettings() { for (x in tabs) applyHostSettings(x) }
-    internal fun applyThirdPartyCookies(on: Boolean) { for (x in tabs) CookieManager.getInstance().setAcceptThirdPartyCookies(x.web, on) }
+    internal fun applyThirdPartyCookies(on: Boolean) { for (x in tabs) applyHostSettings(x) }
     internal fun applyDataSaver(on: Boolean) { for (x in tabs) x.web.settings.loadsImagesAutomatically = !on; cur?.web?.reload() }
     internal fun applyFabVisibility(on: Boolean) { fab.visibility = if (on) View.VISIBLE else View.GONE }
     internal fun applyDarkPages(on: Boolean) { cur?.web?.evaluateJavascript("window.__mxDark&&window.__mxDark($on)", null) }
@@ -2712,6 +2800,28 @@ class MainActivity : Activity() {
         bottomBar.visibility = if (on || gameMode) View.GONE else View.VISIBLE
         if (!gameMode) applySystemBars(on)
         toast(if (on) "⛶ ملء الشاشة — الزر العائم للخروج" else "خرجت من ملء الشاشة")
+    }
+
+    /** مسح فوري: سجل + كوكيز + كاش + تخزين المواقع + كل التابات */
+    internal fun panicWipe() {
+        ui.sheet { box, d ->
+            box.addView(ui.titleView("🚨 مسح فوري؟"))
+            box.addView(ui.infoView("هيتمسح السجل والكوكيز والكاش وبيانات المواقع وهتتقفل كل التابات. المفضلة والصفحات المحفوظة مش هتتأثر. مفيش رجوع."))
+            box.addView(ui.button("امسح كل حاجة دلوقتي") {
+                d.dismiss()
+                try { dismissShield() } catch (_: Exception) {}
+                CookieManager.getInstance().removeAllCookies(null); CookieManager.getInstance().flush()
+                WebStorage.getInstance().deleteAllData()
+                for (x in tabs) { try { x.web.clearCache(true); x.web.clearHistory(); x.web.clearFormData() } catch (_: Exception) {} }
+                val all = tabs.toList()
+                for (x in all.dropLast(1)) closeTab(x)
+                all.lastOrNull()?.let { last -> if (tabs.contains(last)) last.web.loadUrl(Pages.HOME_URL) }
+                io.execute { db.clearHistory(); Storage.cleanCache(this); h.post { saveSession() } }
+                toast("🧹 تم المسح الفوري")
+            })
+            box.addView(ui.space(8))
+            box.addView(ui.button("إلغاء", false) { d.dismiss() })
+        }
     }
 
     internal fun confirmClear() {

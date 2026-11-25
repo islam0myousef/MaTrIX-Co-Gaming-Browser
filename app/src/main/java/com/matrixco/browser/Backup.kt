@@ -7,10 +7,10 @@ import org.json.JSONObject
 /**
  * نسخة احتياطية كاملة في ملف JSON: الإعدادات + المفضلة + قوائم السماح/التخطي + قواعد التجسس + السكريبتات
  * + الفلاتر المخصصة والكلمات المحجوبة (لأنها محفوظة في الإعدادات).
- * مش بتشمل: PIN القفل، مفتاح الـ AI، السجل، قوائم الحجب المحمّلة (بتتحمّل تاني بعد الاسترجاع).
+ * مش بتشمل: PIN القفل، مفاتيح الـ API (الذكاء والفحص السحابي)، السجل، قوائم الحجب المحمّلة (بتتحمّل تاني بعد الاسترجاع).
  */
 object Backup {
-    private val SKIP_KEYS = setOf("api_key")
+    private val SKIP_KEYS = setOf("api_key", "vt_api_key")
     private fun skip(k: String) = k.startsWith("pin_") || k in SKIP_KEYS
 
     private val TABLES: List<Pair<String, List<String>>> = listOf(
