@@ -479,6 +479,11 @@ class MainActivity : Activity() {
             if (req != null && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) startDownload(req.url, req.ua, req.cd, req.mime)
             else if (req != null) toast("لازم تسمح بصلاحية التخزين عشان التحميل")
         }
+        if (requestCode == REQ_PRAYER_GPS) {
+            val t = gpsTab; gpsTab = null
+            val granted = grantResults.any { it == PackageManager.PERMISSION_GRANTED }
+            if (t != null) { if (granted) prayerGps(t) else { gpsAskedDenied = true; gpsReply(t, "denied") } }
+        }
         if (requestCode == REQ_LOCATION) {
             val granted = grantResults.any { it == PackageManager.PERMISSION_GRANTED }
             val cb = geoCallback; val org = geoOrigin
@@ -1665,6 +1670,7 @@ class MainActivity : Activity() {
             "storage" -> openInternal("/storage")
             "cleancache" -> cleanCacheNow(tab)
             "voice" -> startVoice()
+            "gps" -> prayerGps(tab)
             "addsc" -> askEntry("إضافة اختصار", "shortcuts", Pages.defaultShortcuts) { reloadIfAlive(tab) }
             "addgame" -> askEntry("إضافة لعبة", "games", Pages.defaultGames) { reloadIfAlive(tab) }
             "delsc" -> uri.getQueryParameter("i")?.toIntOrNull()?.let { i ->
@@ -1678,6 +1684,76 @@ class MainActivity : Activity() {
             "gxrefresh" -> { GxCorner.ensure(this, true); toast("جاري تحديث ركن الألعاب...") }
             "clearspy" -> io.execute { db.clearSpyLog(); h.post { reloadIfAlive(tab) } }
         }
+    }
+
+
+    // ═════════════════ موقع صفحة مواقيت الصلاة (LocationManager مباشرة، مش WebView) ═════════════════
+    private var gpsTab: Tab? = null
+    private var gpsAskedDenied = false
+    private var gpsListener: android.location.LocationListener? = null
+    private var gpsTimeout: Runnable? = null
+
+    private fun gpsReply(tab: Tab, status: String, loc: android.location.Location? = null) {
+        h.post {
+            gpsTimeout?.let { h.removeCallbacks(it) }; gpsTimeout = null
+            gpsListener?.let { l -> try { (getSystemService(Context.LOCATION_SERVICE) as android.location.LocationManager).removeUpdates(l) } catch (_: Exception) {} }
+            gpsListener = null
+            val js = if (loc != null) "window.mxGpsResult&&window.mxGpsResult('ok'," + loc.latitude + "," + loc.longitude + "," + loc.accuracy + ")"
+                     else "window.mxGpsResult&&window.mxGpsResult('" + status + "')"
+            try { tab.web.evaluateJavascript(js, null) } catch (_: Exception) {}
+        }
+    }
+
+    private fun prayerGps(tab: Tab) {
+        val fine = checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (!fine && !coarse) {
+            if (gpsAskedDenied && !shouldShowRequestPermissionRationale(android.Manifest.permission.ACCESS_FINE_LOCATION)) {
+                toast("فعّل صلاحية الموقع للمتصفح من إعدادات التطبيق")
+                try { startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + packageName)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
+                gpsReply(tab, "denied"); return
+            }
+            gpsTab = tab
+            requestPermissions(arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION), REQ_PRAYER_GPS)
+            return
+        }
+        val lm = getSystemService(Context.LOCATION_SERVICE) as android.location.LocationManager
+        var best: android.location.Location? = null
+        for (p in listOf(android.location.LocationManager.GPS_PROVIDER, android.location.LocationManager.NETWORK_PROVIDER, android.location.LocationManager.PASSIVE_PROVIDER)) {
+            try {
+                val l = lm.getLastKnownLocation(p)
+                val b = best
+                if (l != null && (b == null || l.time > b.time)) best = l
+            } catch (_: Exception) {}
+        }
+        val known = best
+        // مواقيت الصلاة مش محتاجة دقة: موقع من آخر ساعتين كفاية
+        if (known != null && System.currentTimeMillis() - known.time < 2 * 3600_000L) { gpsReply(tab, "ok", known); return }
+        val providers = listOf(android.location.LocationManager.GPS_PROVIDER, android.location.LocationManager.NETWORK_PROVIDER).filter {
+            try { lm.isProviderEnabled(it) } catch (_: Exception) { false }
+        }
+        if (providers.isEmpty()) {
+            if (known != null) gpsReply(tab, "ok", known) else gpsReply(tab, "off")
+            return
+        }
+        gpsListener?.let { l -> try { lm.removeUpdates(l) } catch (_: Exception) {} }
+        val listener = object : android.location.LocationListener {
+            override fun onLocationChanged(location: android.location.Location) { gpsReply(tab, "ok", location) }
+            override fun onProviderEnabled(provider: String) {}
+            override fun onProviderDisabled(provider: String) {}
+            @Deprecated("legacy callback")
+            override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+        }
+        gpsListener = listener
+        var started = false
+        for (p in providers) {
+            try { lm.requestLocationUpdates(p, 0L, 0f, listener, Looper.getMainLooper()); started = true } catch (_: Exception) {}
+        }
+        if (!started) { gpsListener = null; if (known != null) gpsReply(tab, "ok", known) else gpsReply(tab, "error"); return }
+        val to = Runnable { if (known != null) gpsReply(tab, "ok", known) else gpsReply(tab, "timeout") }
+        gpsTimeout?.let { h.removeCallbacks(it) }
+        gpsTimeout = to
+        h.postDelayed(to, 25000)
     }
 
     private fun openLegacy(tab: Tab, url: String) {
@@ -3587,6 +3663,7 @@ class MainActivity : Activity() {
         private const val REQ_WALL = 4106
         private const val REQ_LOCATION = 4107
         private const val REQ_NOTIF = 4108
+        private const val REQ_PRAYER_GPS = 4109
         private const val REQ_PINRESET = 4120
         private const val REQ_BK_EXPORT = 4121
         private const val REQ_BK_IMPORT = 4122
