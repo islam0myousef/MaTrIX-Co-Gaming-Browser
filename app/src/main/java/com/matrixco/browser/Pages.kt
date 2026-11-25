@@ -240,6 +240,23 @@ body.wall .hero{background:radial-gradient(ellipse at 90% 0%,rgba(255,27,45,.26)
 body.opera .wimg.op{background:radial-gradient(ellipse at 85% 0%,rgba(255,27,45,.25),transparent 40%),radial-gradient(ellipse at 5% 95%,rgba(255,27,45,.09),transparent 35%),var(--sf)!important}
 body.opera .wm{display:none}
 body.opera .top{margin-bottom:22px}
+/* Opera calm start page */
+.wimg.op,body.opera .wimg.op{background:radial-gradient(ellipse 120% 45% at 20% 100%,rgba(70,120,255,.35),transparent 70%),linear-gradient(165deg,#0b3bd1 0%,#0a2a9e 38%,#08195f 75%,#060f3a 100%)!important}
+.cpage .optop{justify-content:flex-end;margin:0 0 14px}
+.cpage .optop a{background:transparent;color:#dfe6ff;font-size:20px;width:36px;height:36px}
+.cpage .search{background:rgba(6,9,18,.86);border:0;box-shadow:none;border-radius:999px;padding:4px 8px 4px 8px;gap:4px}
+.cpage .search input{font-size:14px;padding:14px 6px;color:#fff}
+.cpage .search input::placeholder{color:#a4abc2}
+.cpage .search .b{width:38px;height:38px;background:transparent;color:#c9d2f2;font-size:19px;box-shadow:none;font-weight:400;border-radius:50%}
+.cpage .search .eng{width:34px;height:34px;border-radius:50%;background:#fff;color:#4285f4;font-weight:900;font-size:18px;display:flex;align-items:center;justify-content:center;text-decoration:none;flex:none}
+.grid.dials{grid-template-columns:repeat(5,minmax(0,1fr));gap:14px 0;margin-top:26px}
+.dials .tile{min-height:92px;padding:0;gap:8px;font-size:11px;color:#eef1ff}
+.dials .tile .ic{width:58px;height:58px;border-radius:18px;background:#f4f6ff;border:0;box-shadow:none}
+.dials .tile .ic img{width:34px;height:34px;border-radius:8px}
+.dials .tile span{color:#eef1ff;text-shadow:0 1px 3px rgba(0,0,0,.35)}
+.dials .tile.add .ic{background:rgba(6,9,18,.82);color:#c9d2f2;font-size:26px;font-weight:300}
+.cpage .strip a,.cpage .card,.cpage .control,.cpage .game{background:rgba(8,12,28,.55);border:0;box-shadow:none}
+.cpage .strip b{color:#eef1ff}
 @media(min-width:560px){body{padding:26px 28px 60px}.hero{padding:38px 32px 28px}.hero-title{font-size:46px}.grid{grid-template-columns:repeat(7,minmax(0,1fr))}.games{grid-template-columns:repeat(3,minmax(0,1fr))}.strip a{padding:17px}.strip b{font-size:22px}}
 @media(max-width:360px){body{padding:14px 12px 40px}.hero{padding:23px 15px 17px}.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.hero-title{font-size:30px}.strip{gap:6px}.strip a{padding:11px 5px}.strip b{font-size:15px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
@@ -371,8 +388,8 @@ body.opera .top{margin-bottom:22px}
             "<div class=\"ndots\"><i class=\"on\"></i><i></i></div></div>")
         sb.append("<div class=\"page cpage\">")
 
-        sb.append("<div class=\"optop\"><a href=\"mx://tools\" aria-label=\"القائمة\">☰</a><b>MaTrIX</b><a href=\"mx://voice\" aria-label=\"بحث صوتي\">🎤</a></div>")
-        sb.append("<form class=\"search\" onsubmit=\"return go()\"><a class=\"b\" href=\"mx://voice\" aria-label=\"بحث صوتي\">🎤</a><input id=\"q\" placeholder=\"ابحث أو أدخل عنوانًا\" autocomplete=\"off\" autocapitalize=\"off\"><a class=\"b\" href=\"https://mx.home/\" aria-label=\"بحث\">⌕</a></form>")
+        sb.append("<div class=\"optop\"><a href=\"mx://tools\" aria-label=\"القائمة\">☰</a></div>")
+        sb.append("<form class=\"search\" onsubmit=\"return go()\"><a class=\"eng\" href=\"https://mx.home/\" aria-label=\"بحث\">⌕</a><input id=\"q\" placeholder=\"ابحث أو أدخل عنوانًا\" autocomplete=\"off\" autocapitalize=\"off\"><a class=\"b\" href=\"mx://tools\" aria-label=\"القائمة\">▦</a><a class=\"b\" href=\"mx://voice\" aria-label=\"بحث صوتي\">🎤</a></form>")
 
         sb.append("<div class=\"grid dials\">")
         val custom = Cfg.str("shortcuts", "").isNotEmpty()
@@ -381,7 +398,7 @@ body.opera .top{margin-bottom:22px}
             if (custom) sb.append("<span class=\"x\" onclick=\"event.preventDefault();location.href='mx://delsc?i=").append(i).append("'\">×</span>")
             sb.append("</a>")
         }
-        sb.append("<a class=\"tile\" href=\"mx://addsc\"><div class=\"ic\">＋</div><span>إضافة</span></a></div>")
+        sb.append("<a class=\"tile add\" href=\"mx://addsc\"><div class=\"ic\">＋</div><span>إضافة</span></a></div>")
 
         val st = Storage.compute(ctx)
         sb.append("<div class=\"strip\"><a href=\"https://mx.home/shield\"><b>").append(db.todayBlocked()).append("</b><span>🛡 محجوب اليوم</span></a>")

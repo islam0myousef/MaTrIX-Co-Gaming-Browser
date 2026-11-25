@@ -20,7 +20,7 @@ object Themes {
     private val midnight = MxTheme("midnight", "Midnight", c(31, 33, 40), c(43, 46, 55), c(54, 58, 68), c(96, 140, 240), c(160, 190, 250), Color.WHITE, c(168, 172, 184), false)
     private val light = MxTheme("classic", "Light", c(244, 245, 248), Color.WHITE, c(230, 232, 238), c(50, 100, 220), c(70, 110, 200), c(24, 26, 32), c(100, 106, 120), true)
 
-    private val opera = MxTheme("opera", "Opera", c(22, 22, 26), c(36, 36, 42), c(50, 50, 58), c(255, 27, 45), c(255, 98, 110), Color.WHITE, c(160, 160, 172), false)
+    private val opera = MxTheme("opera", "Opera", c(20, 22, 28), c(37, 39, 46), c(48, 50, 58), c(255, 27, 45), c(255, 98, 110), Color.WHITE, c(160, 160, 172), false)
     private val operaLight = MxTheme("operalight", "Opera Light", c(243, 243, 246), Color.WHITE, c(229, 229, 234), c(240, 20, 40), c(210, 30, 50), c(22, 22, 26), c(100, 100, 112), true)
     private val gxClassic = MxTheme("gxclassic", "GX Classic", c(27, 24, 48), c(42, 39, 69), c(53, 49, 90), c(139, 124, 246), c(166, 139, 232), Color.WHITE, c(169, 164, 200), false)
     private val whiteWolf = MxTheme("whitewolf", "White Wolf", c(236, 238, 243), Color.WHITE, c(224, 227, 234), c(250, 30, 78), c(200, 40, 90), c(18, 18, 24), c(100, 104, 118), true)

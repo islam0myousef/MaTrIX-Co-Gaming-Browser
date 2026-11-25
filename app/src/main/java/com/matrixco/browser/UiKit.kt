@@ -107,8 +107,8 @@ class UiKit(private val act: Activity) {
     fun applySwitch(sw: Switch, on: Boolean) {
         sw.isChecked = on
         val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
-        sw.thumbTintList = ColorStateList(states, intArrayOf(Color.WHITE, theme.sub))
-        sw.trackTintList = ColorStateList(states, intArrayOf(theme.accent.withAlpha(180), theme.sub.withAlpha(70)))
+        sw.thumbTintList = ColorStateList(states, intArrayOf(Color.rgb(16, 48, 140), Color.rgb(205, 205, 212)))
+        sw.trackTintList = ColorStateList(states, intArrayOf(Color.rgb(194, 208, 255), Color.rgb(70, 72, 80)))
     }
 
     /** خلفية الصف: لو شغّال تاخد إطار ناعم بلون الثيم */

@@ -2088,136 +2088,132 @@ class MainActivity : Activity() {
 
     private fun showMenu() = showOperaMenu()
 
-    /** قايمة بأسلوب Opera: بطاقة الحالة، مفاتيح سريعة، اختصارات، بانر الشبكة */
+    /** قايمة بنفس تقسيمة Opera: شريط الحساب، 4 مفاتيح سريعة، صف التحديث، شبكة بلاطات عمودين، قايمة بسيطة */
     private fun showOperaMenu() {
         dismissMenu(); dismissShield()
         val d = Dialog(this)
         d.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
-        val bg = theme.bg; val card = theme.surface; val card2 = theme.surface2
-        val txt = theme.text; val sub = theme.sub; val teal = theme.accent
-        val sheet = Ui.topRound(bg, dp(26).toFloat())
-        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_RTL; setPadding(dp(14), dp(14), dp(14), dp(18)) }
-        val sv = ScrollView(this).apply { isVerticalScrollBarEnabled = false; background = sheet; addView(col, ViewGroup.LayoutParams(MATCH, WRAP)) }
+        val bg = theme.bg; val card = theme.surface
+        val txt = theme.text; val sub = theme.sub
+        val icoC = if (theme.light) Color.rgb(70, 74, 90) else Color.rgb(196, 204, 238)
+        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_RTL; setPadding(0, 0, 0, dp(24)) }
+        val sv = ScrollView(this).apply { isVerticalScrollBarEnabled = false; background = Ui.topRound(bg, dp(22).toFloat()); addView(col, ViewGroup.LayoutParams(MATCH, WRAP)) }
 
         fun ic(name: String, color: Int, size: Int) = ImageView(this).apply { setImageDrawable(IconDrawable(name, color, dp(size))) }
         fun lp(w: Int, h: Int, top: Int = 0) = LinearLayout.LayoutParams(w, h).apply { topMargin = top }
+        fun pad(v: View, top: Int = 0) = lp(MATCH, WRAP, top).also { it.marginStart = dp(14); it.marginEnd = dp(14) }
 
-        // بطاقة الحالة
+        // شريط الحساب (عرض كامل)
         val head = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(14), dp(12), dp(14), dp(12))
-            background = Ui.round(card, dp(22).toFloat(), Color.argb(26, 255, 255, 255), dp(1))
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(16), dp(16), dp(10), dp(14))
+            background = Ui.topRound(card, dp(22).toFloat())
         }
         val av = FrameLayout(this).apply {
-            background = android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TL_BR, intArrayOf(theme.accent, theme.accent2)).apply { shape = android.graphics.drawable.GradientDrawable.OVAL }
-            addView(ic("shield_check", Color.WHITE, 26), FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER))
+            background = Ui.oval(theme.surface2)
+            addView(ic("shield_check", icoC, 26), FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER))
         }
-        head.addView(av, LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginEnd = dp(12) })
+        head.addView(av, LinearLayout.LayoutParams(dp(52), dp(52)).apply { marginEnd = dp(14) })
         val ht = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        ht.addView(TextView(this).apply { text = "MaTrIX Co"; textSize = 16f; setTextColor(txt); typeface = Typeface.DEFAULT_BOLD })
+        ht.addView(TextView(this).apply { text = "MaTrIX Co"; textSize = 15f; setTextColor(txt) })
         ht.addView(TextView(this).apply { text = "الجدار الحديدي: " + (if (IronGuard.enabled()) "شغّال" else "مقفول") + " • " + appVersion(); textSize = 12f; setTextColor(sub) })
+        ht.addView(TextView(this).apply {
+            text = "إعدادات الحماية"; textSize = 12f; setTextColor(txt); gravity = Gravity.CENTER
+            setPadding(dp(14), dp(6), dp(14), dp(6)); background = Ui.round(0, dp(16).toFloat(), sub.withAlpha(150), dp(1))
+            setOnClickListener { d.dismiss(); openSettings("iron") }
+        }, lp(WRAP, WRAP, dp(8)))
         head.addView(ht, LinearLayout.LayoutParams(0, WRAP, 1f))
         head.addView(FrameLayout(this).apply {
-            addView(ic("settings", sub, 24), FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
+            addView(ic("settings", icoC, 24), FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
             setOnClickListener { d.dismiss(); openSettings("main") }
         }, LinearLayout.LayoutParams(dp(44), dp(44)))
-        col.addView(head)
+        col.addView(head, lp(MATCH, WRAP))
 
-        // مفاتيح سريعة
-        val quick = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutDirection = View.LAYOUT_DIRECTION_RTL }
-        col.addView(quick, lp(MATCH, WRAP, dp(14)))
+        // مفاتيح سريعة (4): VPN، توفير البيانات، حجب الإعلانات، الوضع الليلي
+        val quick = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutDirection = View.LAYOUT_DIRECTION_RTL; setPadding(dp(10), 0, dp(10), 0) }
+        col.addView(quick, lp(MATCH, WRAP, dp(16)))
         lateinit var refreshQuick: () -> Unit
+        val tint = Color.rgb(
+            (Color.red(theme.accent) * 0.3f + 255 * 0.7f).toInt(), (Color.green(theme.accent) * 0.3f + 255 * 0.7f).toInt(), (Color.blue(theme.accent) * 0.3f + 255 * 0.7f).toInt())
         fun qBtn(icon: String, label: String, state: String, on: Boolean, click: () -> Unit) {
             val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; setOnClickListener { click() } }
-            val circle = FrameLayout(this).apply { background = Ui.round(if (on) teal else card2, dp(20).toFloat()) }
-            circle.addView(ic(icon, if (on) Color.WHITE else txt, 24), FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
-            c.addView(circle, LinearLayout.LayoutParams(dp(60), dp(56)))
-            c.addView(TextView(this).apply { text = label; textSize = 11f; setTextColor(txt); gravity = Gravity.CENTER; setPadding(0, dp(6), 0, 0) })
-            c.addView(TextView(this).apply { text = state; textSize = 10f; setTextColor(sub); gravity = Gravity.CENTER })
+            val box = FrameLayout(this).apply { background = Ui.round(if (on) tint else theme.surface2, dp(22).toFloat()) }
+            box.addView(ic(icon, if (on) theme.accent.darker(0.5f) else icoC, 24), FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
+            c.addView(box, LinearLayout.LayoutParams(dp(64), dp(64)))
+            c.addView(TextView(this).apply { text = label; textSize = 11f; setTextColor(txt); gravity = Gravity.CENTER; setPadding(0, dp(6), 0, 0); maxLines = 2 })
+            c.addView(TextView(this).apply { text = state; textSize = 9f; setTextColor(sub); gravity = Gravity.CENTER })
             quick.addView(c, LinearLayout.LayoutParams(0, WRAP, 1f))
         }
         refreshQuick = {
             quick.removeAllViews()
             val vpn = NetGuard.vpnActive(this) || NetGuard.rule() != null
-            qBtn("globe", "VPN", if (vpn) "شغّال" else "إيقاف", vpn) { d.dismiss(); openSettings("network") }
+            qBtn("globe", "VPN", if (vpn) "تشغيل" else "إيقاف", vpn) { d.dismiss(); openSettings("network") }
             val ds = Cfg.bool(Cfg.DATASAVER, false)
-            qBtn("bolt", "موفر البيانات", if (ds) "شغّال" else "إيقاف", ds) { Cfg.setBool(Cfg.DATASAVER, !ds); toast(if (!ds) "موفر البيانات شغّال (الصور مقفولة)" else "موفر البيانات مقفول"); cur?.web?.reload(); refreshQuick() }
+            qBtn("bolt", "عمليات توفير البيانات", if (ds) "تشغيل" else "إيقاف", ds) { Cfg.setBool(Cfg.DATASAVER, !ds); toast(if (!ds) "موفر البيانات شغّال (الصور مقفولة)" else "موفر البيانات مقفول"); cur?.web?.reload(); refreshQuick() }
             val sh = Cfg.bool(Cfg.SHIELD, true)
-            qBtn("shield", "حاجب الإعلانات", if (sh) "شغّال" else "إيقاف", sh) { gate { Cfg.setBool(Cfg.SHIELD, !sh); cur?.web?.reload(); refreshQuick() } }
-            val dk = Cfg.bool(Cfg.DARK, false)
+            qBtn("shield", "حجب الإعلانات", if (sh) "تشغيل" else "إيقاف", sh) { gate { Cfg.setBool(Cfg.SHIELD, !sh); cur?.web?.reload(); refreshQuick() } }
             val nt = Cfg.bool(Cfg.NIGHT, false)
-            qBtn("moon", "الوضع الليلي", if (nt) "شغّال" else "إيقاف", nt) { Cfg.setBool(Cfg.NIGHT, !nt); applyNight(); refreshQuick() }
-            qBtn("eye", "تعتيم المواقع", if (dk) "شغّال" else "إيقاف", dk) { toggleDark(); refreshQuick() }
+            qBtn("moon", "الوضع الليلي", if (nt) "تشغيل" else "إيقاف", nt) { Cfg.setBool(Cfg.NIGHT, !nt); applyNight(); refreshQuick() }
         }
         refreshQuick()
+        col.addView(View(this).apply { setBackgroundColor(sub.withAlpha(60)) }, lp(MATCH, 1, dp(16)))
 
-        // اختصارات
+        // بلاطات: أيقونة على اليمين ثم الاسم
         fun tile(icon: String, label: String, click: () -> Unit): View = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(14), 0, dp(14), 0)
-            background = Ui.round(card, dp(16).toFloat(), Color.argb(20, 255, 255, 255), dp(1))
-            addView(TextView(this@MainActivity).apply { text = label; textSize = 13f; setTextColor(txt) }, LinearLayout.LayoutParams(0, WRAP, 1f))
-            addView(ic(icon, sub, 22), LinearLayout.LayoutParams(dp(22), dp(22)))
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(16), 0, dp(12), 0)
+            background = Ui.round(card, dp(14).toFloat())
+            addView(ic(icon, icoC, 22), LinearLayout.LayoutParams(dp(22), dp(22)).apply { marginEnd = dp(14) })
+            addView(TextView(this@MainActivity).apply { text = label; textSize = 13f; setTextColor(txt); typeface = Typeface.DEFAULT_BOLD; maxLines = 1 }, LinearLayout.LayoutParams(0, WRAP, 1f))
             setOnClickListener { d.dismiss(); click() }
         }
+        val grid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_RTL }
+        col.addView(grid, pad(grid, dp(16)))
+        // صف التحديث (عرض كامل)
+        grid.addView(tile("download", "التحقق من التحديثات") { updateUi.check(true) }, lp(MATCH, dp(54)))
         fun tileRow(a: View, b: View?) {
             val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutDirection = View.LAYOUT_DIRECTION_RTL }
-            r.addView(a, LinearLayout.LayoutParams(0, dp(54), 1f).apply { marginEnd = dp(5) })
-            r.addView(b ?: View(this), LinearLayout.LayoutParams(0, dp(54), 1f).apply { marginStart = dp(5) })
-            col.addView(r, lp(MATCH, WRAP, dp(10)))
+            r.addView(a, LinearLayout.LayoutParams(0, dp(54), 1f).apply { marginEnd = dp(6) })
+            r.addView(b ?: View(this), LinearLayout.LayoutParams(0, dp(54), 1f).apply { marginStart = dp(6) })
+            grid.addView(r, lp(MATCH, WRAP, dp(12)))
         }
-        tileRow(tile("plus", "تبويب جديد") { newTab(Pages.HOME_URL) }, tile("sparkle", "Aria · المساعد الذكي") { showAi() })
-        tileRow(tile("bookmark", "المفضلات") { openInternal("/bookmarks") }, tile("download", "التنزيلات") { openDownloadsManager() })
-        tileRow(tile("history", "المحفوظات") { openInternal("/history") }, tile("book", "صفحات غير متصلة") { openInternal("/offline") })
-        tileRow(tile("game", "وضع الألعاب") { setGameMode(!gameMode, false) }, tile("incognito", "تبويب خاص") { newTab(Pages.HOME_URL, priv = true) })
-        tileRow(tile("bolt", "GX Control") { showGxControl() }, tile("desktop", if (cur?.desktop == true) "نسخة الموبايل" else "نسخة الكمبيوتر") { setDesktop(cur?.desktop != true) })
-        tileRow(tile("bolt", "Performance Lab") { showPerformanceLab() }, tile("shield_check", "Security Center") { openInternal("/shield") })
+        tileRow(tile("bookmark", "المفضلات") { openInternal("/bookmarks") }, tile("sparkle", "Aria · المساعد الذكي") { showAi() })
+        tileRow(tile("history", "المحفوظات") { openInternal("/history") }, tile("download", "التنزيلات") { openDownloadsManager() })
+        tileRow(tile("incognito", "تبويب خاص") { newTab(Pages.HOME_URL, priv = true) }, tile("book", "صفحات غير متصلة") { openInternal("/offline") })
+        tileRow(tile("plus", "تبويب جديد") { newTab(Pages.HOME_URL) }, tile("game", "وضع الألعاب") { setGameMode(!gameMode, false) })
+        tileRow(tile("desktop", if (cur?.desktop == true) "نسخة الموبايل" else "نسخة الكمبيوتر") { setDesktop(cur?.desktop != true) }, tile("shield_check", "Security Center") { openInternal("/shield") })
+        tileRow(tile("bolt", "GX Control") { showGxControl() }, tile("bolt", "Performance Lab") { showPerformanceLab() })
 
-        // بانر الشبكة والـ VPN
-        val banner = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(18), 0, dp(18), 0)
-            background = android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.RIGHT_LEFT,
-                intArrayOf(theme.accent.darker(0.75f), theme.accent, theme.accent2)).apply { cornerRadius = dp(22).toFloat() }
-            setOnClickListener { d.dismiss(); openSettings("network") }
-        }
-        val bt = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        bt.addView(TextView(this).apply { text = "الشبكة والـ VPN المجاني"; textSize = 15f; setTextColor(Color.WHITE); typeface = Typeface.DEFAULT_BOLD })
-        bt.addView(TextView(this).apply { text = "Tor • بروكسي • DNS مشفّر • بدائل VPN موثوقة"; textSize = 11f; setTextColor(Color.argb(220, 255, 255, 255)) })
-        banner.addView(bt, LinearLayout.LayoutParams(0, WRAP, 1f))
-        banner.addView(FrameLayout(this).apply {
-            background = Ui.round(Color.argb(200, 20, 20, 30), dp(14).toFloat())
-            addView(ic("globe", Color.WHITE, 24), FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
-        }, LinearLayout.LayoutParams(dp(46), dp(46)))
-        col.addView(banner, lp(MATCH, dp(72), dp(14)))
-
-        // قايمة
+        // قايمة بسيطة: أيقونة في مربع مدوّر على اليمين + عنوان وسطر صغير
         fun row(icon: String, title: String, subT: String, click: () -> Unit) {
-            val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(6), dp(12), dp(6), dp(12)); setOnClickListener { d.dismiss(); click() } }
+            val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(14), dp(10), dp(14), dp(10)); setOnClickListener { d.dismiss(); click() } }
+            r.addView(FrameLayout(this).apply { background = Ui.round(card, dp(14).toFloat()); addView(ic(icon, icoC, 22), FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER)) }, LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginEnd = dp(16) })
             val t = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             t.addView(TextView(this).apply { text = title; textSize = 15f; setTextColor(txt) })
             t.addView(TextView(this).apply { text = subT; textSize = 12f; setTextColor(sub) })
             r.addView(t, LinearLayout.LayoutParams(0, WRAP, 1f))
-            r.addView(FrameLayout(this).apply { background = Ui.round(card, dp(14).toFloat()); addView(ic(icon, sub, 22), FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER)) }, LinearLayout.LayoutParams(dp(46), dp(46)))
-            col.addView(r, lp(MATCH, WRAP, dp(4)))
+            col.addView(r, lp(MATCH, WRAP, dp(6)))
         }
-        col.addView(View(this).apply { setBackgroundColor(card) }, lp(MATCH, dp(1), dp(14)))
-        row("palette", "المظهر", "الثيمات والخلفيات والألوان") { openSettings("appearance") }
+        col.addView(View(this).apply { setBackgroundColor(Color.TRANSPARENT) }, lp(MATCH, dp(8)))
+        row("palette", "المظهر", "تخصيص متصفحك") { openSettings("appearance") }
+        row("eye", "تعتيم المواقع", if (Cfg.bool(Cfg.DARK, false)) "شغّال" else "إيقاف (اضغط للتبديل)") { toggleDark() }
         row("moon", "قوة الوضع الليلي", "المستوى الحالي: " + Cfg.int(Cfg.NIGHT_LVL, 2) + " من 3 (اضغط للتغيير)") {
             Cfg.setInt(Cfg.NIGHT_LVL, Cfg.int(Cfg.NIGHT_LVL, 2) % 3 + 1); Cfg.setBool(Cfg.NIGHT, true); applyNight()
             toast("الوضع الليلي: مستوى " + Cfg.int(Cfg.NIGHT_LVL, 2))
         }
+        row("globe", "الشبكة والـ VPN", "Tor • بروكسي • DNS مشفّر • بدائل VPN") { openSettings("network") }
+        row("shield_check", "الجدار الحديدي", "الحساسية وسجل المنع والقائمة البيضاء") { openSettings("iron") }
         row("tabs", "إيماءات الشريط السفلي", if (Cfg.bool(Cfg.SWIPE_BAR, true)) "شغّالة: اسحب لفوق للقايمة، يمين/شمال للتبويبات" else "مقفولة (اضغط للتشغيل)") {
             Cfg.setBool(Cfg.SWIPE_BAR, !Cfg.bool(Cfg.SWIPE_BAR, true)); toast(if (Cfg.bool(Cfg.SWIPE_BAR, true)) "الإيماءات شغّالة" else "الإيماءات مقفولة")
         }
-        row("shield_check", "الجدار الحديدي", "مستوى الحساسية وسجل المنع والقائمة البيضاء") { openSettings("iron") }
-        row("storage", "نسخ احتياطي واستعادة", "ملف فيه إعداداتك ومفضلتك وفلاترك") { exportBackup() }
-        row("code", "أدوات الصفحة", "نسخة الكمبيوتر، البحث، القراءة، الترجمة، اللقطات...") { showMenuLegacy() }
+        row("storage", "النسخ الاحتياطي والاستعادة", "ملف فيه إعداداتك ومفضلتك وفلاترك") { exportBackup() }
+        row("code", "أدوات الصفحة", "البحث، القراءة، الترجمة، اللقطات...") { showMenuLegacy() }
         row("settings", "الإعدادات", "كل الإعدادات") { openSettings("main") }
 
         d.setContentView(sv)
         d.window?.let { w ->
             w.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-            w.setLayout(MATCH, (resources.displayMetrics.heightPixels * 0.9f).toInt())
+            w.setLayout(MATCH, (resources.displayMetrics.heightPixels * 0.66f).toInt())
             w.setGravity(Gravity.BOTTOM)
-            w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND); w.setDimAmount(0.55f)
+            w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND); w.setDimAmount(0.5f)
         }
         d.show()
     }

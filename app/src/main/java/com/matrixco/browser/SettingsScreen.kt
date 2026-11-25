@@ -30,6 +30,12 @@ class SettingsScreen(
     private fun dp(v: Int) = ui.dp(v)
     private fun icon(type: String, color: Int = theme.accent2, size: Int = 22) = ImageView(a).apply { setImageDrawable(IconDrawable(type, color, dp(size))) }
 
+    private val icoC get() = if (theme.light) android.graphics.Color.rgb(70, 74, 90) else android.graphics.Color.rgb(196, 204, 238)
+    private fun iconBox(type: String): View = FrameLayout(a).apply {
+        background = Ui.round(theme.surface, dp(15).toFloat())
+        addView(icon(type, icoC, 22), FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER))
+    }
+
     init {
         overlay = LinearLayout(a).apply {
             orientation = LinearLayout.VERTICAL
@@ -95,10 +101,9 @@ class SettingsScreen(
     }
 
     private fun card(col: LinearLayout, rows: List<View>) {
-        val c = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; background = Ui.round(theme.surface, dp(16).toFloat()) }
+        val c = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; }
         for ((i, r) in rows.withIndex()) {
             c.addView(r, LinearLayout.LayoutParams(UiKit.MATCH, ViewGroup.LayoutParams.WRAP_CONTENT))
-            if (i < rows.size - 1) c.addView(View(a).apply { setBackgroundColor(theme.bg) }, LinearLayout.LayoutParams(UiKit.MATCH, 1).apply { marginStart = dp(52) })
         }
         col.addView(c, LinearLayout.LayoutParams(UiKit.MATCH, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
@@ -106,10 +111,10 @@ class SettingsScreen(
     private fun rowBase(ic: String?, title: String, sub: String?, trailing: View?, click: (() -> Unit)?): View {
         val r = LinearLayout(a).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(14), dp(14), dp(14), dp(14))
+            setPadding(dp(14), dp(10), dp(14), dp(10))
             if (click != null) setOnClickListener { click() }
         }
-        if (ic != null) r.addView(icon(ic), LinearLayout.LayoutParams(dp(22), dp(22)).apply { marginEnd = dp(16) })
+        if (ic != null) r.addView(iconBox(ic), LinearLayout.LayoutParams(dp(46), dp(46)).apply { marginEnd = dp(16) })
         val t = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
         t.addView(TextView(a).apply { text = title; textSize = 15f; setTextColor(theme.text) })
         if (sub != null) t.addView(TextView(a).apply { text = sub; textSize = 12f; setTextColor(theme.sub); setPadding(0, dp(2), 0, 0) })
@@ -139,56 +144,63 @@ class SettingsScreen(
     // ───────── الصفحات ─────────
 
     private fun main(col: LinearLayout) {
-        // ترتيب Opera: المفاتيح السريعة فوق، وبعدها الأقسام
-        card(col, listOf(
-            nav("globe", "VPN", "Tor وبروكسي وDNS مشفّر") { push("network") },
-            toggle("bolt", "موفر البيانات", "تقليل استهلاك البيانات (إيقاف الصور)", Cfg.DATASAVER, false) { a.applyDataSaver(it) },
-            toggle("shield", "حجب الإعلانات", "صفحات أسرع وأنظف", Cfg.SHIELD, true) { a.reloadCurrent() },
-            toggle("spy", "حظر برامج التتبع", "منع متتبعات الإعلانات والتحليلات", Cfg.TRK, true) { a.reloadCurrent() },
-            toggle("moon", "الوضع الليلي", "طبقة دافئة لراحة العين", Cfg.NIGHT, false) { a.applyNight() }
-        ))
-        section(col, "")
-        card(col, listOf(
-            nav("globe", "التصفح", "HTTPS، الإيماءات، الصوت") { push("browsing") },
-            nav("palette", "المظهر", "الثيم والألوان والخلفيات") { push("appearance") },
-            nav("book", "بدء الصفحة", "الطلبات السريعة، الخلفية، المحتوى") { push("gxmods") },
-            nav("shield_check", "الخصوصية والأمان", "إعلانات، متتبعات، أمان") { push("privacy") },
-            nav("search", "بحث", a.engineLabel()) { push("search") },
-            nav("storage", "تخزين الملف", "الكاش والصفحات المحفوظة") { push("storage") },
-            action("download", "التنزيلات") { close(); a.openDownloadsManager() }
-        ))
-        section(col, "GX")
-        card(col, listOf(
-            nav("palette", "GX Mods", "خلفيات متحركة، ألوان تمييز، أصوات") { push("gxmods") },
-            nav("bolt", "GX Control", "الذاكرة وتنويم التبويبات") { push("gxcontrol") },
-            action("bolt", "Performance Lab", "قياس RAM وPSS وحالة التبويبات مباشرة") { close(); a.openPerformanceLab() }
-        ))
-        section(col, "الميزات")
-        card(col, listOf(
-            nav("shield_check", "الدرع والخصوصية", "إعلانات، متتبعات، أمان") { push("privacy") },
-            nav("spy", "كاشف التجسس", "رصد البصمة والتسجيل والتتبع") { push("spy") },
-            nav("sparkle", "المساعد الذكي (Claude)", "مفتاح API والموديل") { push("ai") }
-        ))
-        section(col, "عام")
-        card(col, listOf(
-            nav("search", "محرك البحث", a.engineLabel()) { push("search") },
-            nav("palette", "المظهر", "الثيم والألوان") { push("appearance") },
-            nav("globe", "التصفح", "HTTPS، الإيماءات، الصوت") { push("browsing") },
-            nav("game", "الألعاب", "FPS وPing والزر العائم") { push("games") },
-            nav("storage", "المساحة والأداء", "الكاش والصفحات المحفوظة") { push("storage") },
-            action("download", "التنزيلات") { close(); a.openDownloadsManager() }
-        ))
-        section(col, "البيانات")
-        card(col, listOf(
-            action("trash", "مسح بيانات التصفح", "كوكيز، كاش، سجل") { a.confirmClear() },
-            action("trash", "🚨 مسح فوري", "كل حاجة + قفل كل التابات") { a.panicWipe() },
-            action("share", "نسخ احتياطي", "ملف فيه إعداداتك ومفضلتك وفلاترك وكلماتك") { a.exportBackup() },
-            action("download", "استرجاع نسخة", "من ملف نسخة احتياطية") { close(); a.importBackup() }
-        ))
-        section(col, "المتصفح الافتراضي")
-        card(col, listOf(action("globe", "اجعله المتصفح الافتراضي", if (a.isDefaultBrowser()) "✓ هو الافتراضي حاليًا" else "الروابط من التطبيقات الأخرى تفتح هنا") { a.askDefaultBrowser() }))
-        section(col, "حول")
-        card(col, listOf(nav("info", "حول MaTrIX Co", "الإصدار " + a.appVersion()) { push("about") }))
+        // ترتيب Opera: بحث، مفاتيح بسطر حالة، فاصل، الأقسام
+        val items = ArrayList<Pair<String, View>>()
+        fun add(title: String, v: View) { items.add(title to v); col.addView(v) }
+        val q = EditText(a).apply {
+            hint = "إعدادات البحث"; textSize = 14f; setTextColor(theme.text); setHintTextColor(theme.sub)
+            background = Ui.round(theme.surface, dp(24).toFloat()); setPadding(dp(18), dp(12), dp(18), dp(12)); isSingleLine = true
+        }
+        col.addView(q, LinearLayout.LayoutParams(UiKit.MATCH, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) })
+        fun opToggle(ic: String, title: String, key: String, def: Boolean, after: (Boolean) -> Unit): View {
+            var state = Cfg.bool(key, def)
+            val sw = ui.switchView(state)
+            val stateTv = TextView(a).apply { textSize = 12f; setTextColor(theme.sub); text = if (state) "ممكن" else "معطل" }
+            val r = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(14), dp(10), dp(14), dp(10)) }
+            r.addView(iconBox(ic), LinearLayout.LayoutParams(dp(46), dp(46)).apply { marginEnd = dp(16) })
+            val t = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
+            t.addView(TextView(a).apply { text = title; textSize = 15f; setTextColor(theme.text) })
+            t.addView(stateTv)
+            r.addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            r.addView(View(a).apply { setBackgroundColor(theme.sub.withAlpha(70)) }, LinearLayout.LayoutParams(1, dp(30)).apply { marginEnd = dp(12); marginStart = dp(12) })
+            r.addView(sw)
+            r.setOnClickListener { state = !state; Cfg.setBool(key, state); ui.applySwitch(sw, state); stateTv.text = if (state) "ممكن" else "معطل"; AdBlocker.refreshRules(); after(state) }
+            return r
+        }
+        add("VPN", nav("globe", "VPN", "Tor وبروكسي وDNS مشفّر") { push("network") })
+        add("توفير البيانات", opToggle("bolt", "عمليات توفير البيانات", Cfg.DATASAVER, false) { a.applyDataSaver(it) })
+        add("حجب الإعلانات", opToggle("shield", "حجب الإعلانات", Cfg.SHIELD, true) { a.reloadCurrent() })
+        add("حظر برامج التتبع", opToggle("spy", "حظر برامج التتبع", Cfg.TRK, true) { a.reloadCurrent() })
+        add("الوضع الليلي", opToggle("moon", "الوضع الليلي", Cfg.NIGHT, false) { a.applyNight() })
+        col.addView(View(a).apply { setBackgroundColor(theme.sub.withAlpha(60)) }, LinearLayout.LayoutParams(UiKit.MATCH, 1).apply { topMargin = dp(8); bottomMargin = dp(8) })
+        add("متصفح", nav("globe", "متصفح", "HTTPS، الإيماءات، الصوت") { push("browsing") })
+        add("المظهر", nav("palette", "المظهر", "الثيمات والخطط والألوان") { push("appearance") })
+        add("بدء الصفحة", nav("home", "بدء الصفحة", "الطلبات السريعة، الأخبار، الخلفية") { push("gxmods") })
+        add("الخصوصية والأمان", nav("shield_check", "الخصوصية والأمان", "إعدادات الدرع والمتتبعات والأمان") { push("privacy") })
+        add("بحث", nav("search", "بحث", a.engineLabel()) { push("search") })
+        add("المساحة والأداء", nav("storage", "المساحة والأداء", "الكاش والصفحات المحفوظة") { push("storage") })
+        add("التنزيلات", action("download", "التنزيلات") { close(); a.openDownloadsManager() })
+        add("المساعد الذكي Claude", nav("sparkle", "المساعد الذكي (Claude)", "مفتاح API والموديل") { push("ai") })
+        add("كاشف التجسس", nav("spy", "كاشف التجسس", "رصد البصمة والتسجيل والتتبع") { push("spy") })
+        add("الجدار الحديدي", nav("shield_check", "الجدار الحديدي", "الحساسية وسجل المنع") { push("iron") })
+        add("الألعاب GX", nav("game", "الألعاب", "FPS وPing والزر العائم") { push("games") })
+        add("GX Mods", nav("palette", "GX Mods", "خلفيات متحركة، ألوان تمييز، أصوات") { push("gxmods") })
+        add("GX Control", nav("bolt", "GX Control", "الذاكرة وتنويم التبويبات") { push("gxcontrol") })
+        add("Performance Lab", action("bolt", "Performance Lab", "قياس RAM وPSS وحالة التبويبات مباشرة") { close(); a.openPerformanceLab() })
+        add("مسح بيانات التصفح", action("trash", "مسح بيانات التصفح", "كوكيز، كاش، سجل") { a.confirmClear() })
+        add("مسح فوري", action("trash", "مسح فوري", "كل حاجة + قفل كل التابات") { a.panicWipe() })
+        add("نسخ احتياطي", action("share", "المزامنة والنسخ الاحتياطي", "إعداداتك ومفضلتك وفلاترك وكلماتك") { a.exportBackup() })
+        add("استرجاع نسخة", action("download", "استرجاع نسخة", "من ملف نسخة احتياطية") { close(); a.importBackup() })
+        add("المتصفح الافتراضي", action("globe", "اجعله المتصفح الافتراضي", if (a.isDefaultBrowser()) "✓ هو الافتراضي حاليًا" else "الروابط من التطبيقات الأخرى تفتح هنا") { a.askDefaultBrowser() })
+        add("حول", nav("info", "حول MaTrIX Co", "الإصدار " + a.appVersion()) { push("about") })
+        q.addTextChangedListener(object : android.text.TextWatcher {
+            override fun afterTextChanged(s: android.text.Editable?) {
+                val k = s?.toString()?.trim().orEmpty()
+                for ((title, v) in items) v.visibility = if (k.isEmpty() || title.contains(k, true)) View.VISIBLE else View.GONE
+            }
+            override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, af: Int) {}
+            override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
+        })
     }
 
     private fun privacy(col: LinearLayout) {
