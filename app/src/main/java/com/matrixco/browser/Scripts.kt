@@ -5,6 +5,20 @@ import org.json.JSONObject
 /** سكريبتات تُحقن داخل الصفحات (تايمرات، حجب، تجسس، قراءة، فيديو ...) */
 object Scripts {
 
+    /** Human-verification providers: never filtered, never given our page scripts. */
+    private val CHALLENGE_HOSTS = listOf("challenges.cloudflare.com", "hcaptcha.com", "recaptcha.net", "arkoselabs.com", "funcaptcha.com", "geetest.com")
+
+    fun isChallengeHost(host: String?): Boolean {
+        val h = (host ?: return false).lowercase()
+        return CHALLENGE_HOSTS.any { h == it || h.endsWith(".$it") }
+    }
+
+    /** Wrap a document-start script so it does nothing inside verification frames. */
+    fun skipChallengeFrames(js: String): String {
+        val hosts = CHALLENGE_HOSTS.joinToString("|") { it.replace(".", "\\.") }
+        return "if(!(/(^|\\.)(" + hosts + ")$/.test(location.hostname)||(location.hostname.indexOf('google.')>=0&&location.pathname.indexOf('/recaptcha')===0))){\n" + js + "\n}"
+    }
+
     private val ADS_SEL = listOf(
         ".adsbygoogle", "ins.adsbygoogle", "[id^='google_ads_']", "[id^='div-gpt-ad']", "[data-ad-slot]",
         "[data-ad-client]", "iframe[src*='doubleclick.net']", "iframe[src*='googlesyndication']",

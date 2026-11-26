@@ -996,15 +996,15 @@ class MainActivity : Activity() {
                 // This marker is intentionally separate: it proves the page received
                 // a script before its own JavaScript, rather than via late fallback.
                 androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, "try{Object.defineProperty(window,'__mxDocumentStart',{value:1,enumerable:false,configurable:true});}catch(e){window.__mxDocumentStart=1;}", setOf("*"))
-                androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, Scripts.TIMER_ENGINE, setOf("*"))
-                if (AdBlocker.enabled() && AdBlocker.adsOn()) androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, Stealth.DOC_START, setOf("*"))
+                androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, Scripts.skipChallengeFrames(Scripts.TIMER_ENGINE), setOf("*"))
+                if (AdBlocker.enabled() && AdBlocker.adsOn()) androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, Scripts.skipChallengeFrames(Stealth.DOC_START), setOf("*"))
                 // إخفاء مبكر للإعلانات قبل أي سكريبت من الموقع: كشف المانع بيقيس عناصر الـ bait
                 // في أول لحظة، ولو الإخفاء اتأخر لحد onPageStarted بيبان الإعلان وبتنكشف الحماية
                 if (AdBlocker.enabled()) Scripts.earlyCosmetic(AdBlocker.adsOn(), AdBlocker.annoyOn())?.let {
-                    androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, it, setOf("*"))
+                    androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, Scripts.skipChallengeFrames(it), setOf("*"))
                 }
                 if (Cfg.bool(Cfg.FP, true)) {
-                    androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, Scripts.harden(tab.privacySeed), setOf("*"))
+                    androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, Scripts.skipChallengeFrames(Scripts.harden(tab.privacySeed)), setOf("*"))
                 }
                 Log.i("MaTRIX.Inject", "Document-start injection registered; fingerprint protection=${Cfg.bool(Cfg.FP, true)}")
             } else {
@@ -1226,6 +1226,12 @@ class MainActivity : Activity() {
                 // صفحات التطبيق الداخلية ما تتحمّلش كـ iframe أو مورد فرعي من موقع خارجي
                 if (!req.isForMainFrame && !isInternal(tab.url)) return blockedResponse()
                 return Pages.respond(this@MainActivity, db, theme, uri)
+            }
+
+            if (!req.isForMainFrame && Scripts.isChallengeHost(host)) {
+                // Verification widgets live in a third-party frame and need their own cookies to finish.
+                h.post { try { CookieManager.getInstance().setAcceptThirdPartyCookies(tab.web, true) } catch (_: Exception) {} }
+                return null
             }
 
             if (req.isForMainFrame) {

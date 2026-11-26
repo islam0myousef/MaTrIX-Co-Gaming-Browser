@@ -168,6 +168,7 @@ object AdBlocker {
         if (scheme != "http" && scheme != "https") return 0
         val host = norm(uri.host)
         if (host.isEmpty()) return 0
+        if (Scripts.isChallengeHost(host)) return 0
         if ((!mainFrame && isSiteAllowed(pageHost)) || isSiteAllowed(host)) return 0
 
         val requestType = NetworkRuleEngine.inferType(uri.toString(), accept, mainFrame)
