@@ -1126,6 +1126,14 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun cleanupOff(host: String): Boolean =
+        getSharedPreferences("mx_prefs", MODE_PRIVATE).getStringSet("cleanup_sites", emptySet())?.contains(host.lowercase()) == true
+    private fun setCleanupOff(host: String, off: Boolean) {
+        val sp = getSharedPreferences("mx_prefs", MODE_PRIVATE)
+        val set = HashSet(sp.getStringSet("cleanup_sites", emptySet()) ?: emptySet())
+        if (off) set.add(host.lowercase()) else set.remove(host.lowercase())
+        sp.edit().putStringSet("cleanup_sites", set).apply()
+    }
     private fun siteKey(host: String): String { val p = host.lowercase().split('.'); return if (p.size <= 2) host.lowercase() else p.takeLast(2).joinToString(".") }
     private val closedTabs = ArrayList<String>()
     private fun reopenClosed() {
@@ -1302,6 +1310,12 @@ class MainActivity : Activity() {
             tab.url = u; tab.progress = 100
             if (u.startsWith("https://")) tab.upgradedFrom = null   // الترقية نجحت
             inject(tab); injectUserScripts(tab)
+            if (u.startsWith("http") && !cleanupOff(tab.host)) {
+                try { tab.web.evaluateJavascript(assets.open("cleanup.js").bufferedReader().use { it.readText() }, null) } catch (_: Throwable) {}
+            }
+            if (gameMode && u.startsWith("http")) {
+                try { tab.web.evaluateJavascript(assets.open("gaming.js").bufferedReader().use { it.readText() }, null) } catch (_: Throwable) {}
+            }
             h.postDelayed({ if (tabs.contains(tab) && tab === cur) captureThumb(tab) }, 900)
             scanAdult(tab); h.postDelayed({ scanAdult(tab) }, 1800)
             tab.redirects = 0; scanRisk(tab); h.postDelayed({ scanRisk(tab) }, 2500)
@@ -2582,6 +2596,7 @@ class MainActivity : Activity() {
         box.addView(swRow("كاشف التجسس", "≥90% حجب تلقائي، غير كده يسألك", AdBlocker.spyOn()) { Cfg.setBool(Cfg.SPY, it); reloadSoon() })
         if (!internal && t != null) {
             box.addView(divider())
+            box.addView(swRow("تنظيف نوافذ الصفحة", "إزالة النوافذ والتراكبات لهذا الموقع", !cleanupOff(host)) { on -> setCleanupOff(host, !on); reloadSoon() })
             box.addView(swRow("تخطي الانتظار التلقائي", "لهذا الموقع", t.skipMode != 0) { on -> t.skipMode = if (on) 1 else 0; io.execute { db.setSkipMode(host, if (on) null else 0) }; reloadSoon() })
             box.addView(swRow("وضع التوافق القديم", "HTTP وشهادات قديمة (راوترات/مواقع قديمة)", (db.getLegacy(host) and 7) != 0) { on -> db.setLegacy(host, (db.getLegacy(host) and 24) or (if (on) 7 else 0)); reloadSoon() })
             box.addView(swRow("السماح بالروابط الخارجية", "يفتح روابط التطبيقات (زي تليجرام) من هذا الموقع بس", (db.getLegacy(host) and 8) != 0) { on -> db.setLegacy(host, (db.getLegacy(host) and 23) or (if (on) 8 else 0)) })
